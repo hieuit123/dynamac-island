@@ -31,7 +31,14 @@ struct HoverTracker: NSViewRepresentable {
 
         var isMouseInside: Bool {
             guard let window else { return false }
-            return bounds.contains(convert(window.mouseLocationOutsideOfEventStream, from: nil))
+            // Screen-space check, inclusive of the edges: the pointer pinned to the top row of the screen sits
+            // exactly on the island's max-Y edge, which `contains` treats as outside.
+            let rect = window.convertToScreen(convert(bounds, to: nil))
+            var area = rect.insetBy(dx: -1, dy: -1)
+            if let screen = window.screen, rect.maxY >= screen.frame.maxY - 1 {
+                area.size.height += 4 // extend past the screen top so the pinned pointer always counts as inside
+            }
+            return area.contains(NSEvent.mouseLocation)
         }
     }
 }
