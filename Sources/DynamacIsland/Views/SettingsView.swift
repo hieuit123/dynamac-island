@@ -34,6 +34,13 @@ struct SettingsView: View {
                 Toggle("Battery", isOn: $settings.showBattery)
             }
 
+            Section("Music") {
+                Toggle("Animated waveform in collapsed island", isOn: $settings.animatedWaveform)
+                Toggle("Tint black-hole effect with album colors", isOn: $settings.albumTintedEffects)
+                Toggle("Gradient progress bar", isOn: $settings.gradientProgress)
+                Toggle("Swipe left/right on the island to skip", isOn: $settings.swipeToSkip)
+            }
+
             Section {
                 Toggle("Replace volume & brightness HUD", isOn: $settings.hudEnabled)
                 if settings.hudEnabled && !hud.isActive {

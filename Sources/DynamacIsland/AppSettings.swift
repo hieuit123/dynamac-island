@@ -28,6 +28,10 @@ final class AppSettings: ObservableObject {
     @Published var showMusic: Bool { didSet { defaults.set(showMusic, forKey: "showMusic") } }
     @Published var showCalendar: Bool { didSet { defaults.set(showCalendar, forKey: "showCalendar") } }
     @Published var showBattery: Bool { didSet { defaults.set(showBattery, forKey: "showBattery") } }
+    @Published var animatedWaveform: Bool { didSet { defaults.set(animatedWaveform, forKey: "animatedWaveform") } }
+    @Published var albumTintedEffects: Bool { didSet { defaults.set(albumTintedEffects, forKey: "albumTintedEffects") } }
+    @Published var gradientProgress: Bool { didSet { defaults.set(gradientProgress, forKey: "gradientProgress") } }
+    @Published var swipeToSkip: Bool { didSet { defaults.set(swipeToSkip, forKey: "swipeToSkip") } }
     @Published var launchAtLogin: Bool {
         didSet {
             guard launchAtLogin != (SMAppService.mainApp.status == .enabled) else { return }
@@ -43,6 +47,7 @@ final class AppSettings: ObservableObject {
         defaults.register(defaults: [
             "effectStyle": EffectStyle.accretion.rawValue, "displayID": 0, "hudEnabled": true,
             "expandOnHover": false, "hapticsEnabled": true, "showMusic": true, "showCalendar": true, "showBattery": true,
+            "animatedWaveform": true, "albumTintedEffects": true, "gradientProgress": true, "swipeToSkip": true,
         ])
         effectStyle = EffectStyle(rawValue: defaults.string(forKey: "effectStyle") ?? "") ?? .accretion
         displayID = UInt32(defaults.integer(forKey: "displayID"))
@@ -52,6 +57,10 @@ final class AppSettings: ObservableObject {
         showMusic = defaults.bool(forKey: "showMusic")
         showCalendar = defaults.bool(forKey: "showCalendar")
         showBattery = defaults.bool(forKey: "showBattery")
+        animatedWaveform = defaults.bool(forKey: "animatedWaveform")
+        albumTintedEffects = defaults.bool(forKey: "albumTintedEffects")
+        gradientProgress = defaults.bool(forKey: "gradientProgress")
+        swipeToSkip = defaults.bool(forKey: "swipeToSkip")
         launchAtLogin = SMAppService.mainApp.status == .enabled
     }
 }

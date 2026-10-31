@@ -11,6 +11,8 @@ struct BlackHoleEffect: View, Animatable {
     let topRadius: CGFloat
     let bottomRadius: CGFloat
     let layer: Layer
+    /// Album colors; when set, the effect is tinted to match the playing artwork.
+    var palette: [Color]? = nil
 
     var animatableData: Double {
         get { intensity }
@@ -38,8 +40,9 @@ struct BlackHoleEffect: View, Animatable {
     // MARK: Accretion disk – hot rotating ring of light
 
     private func accretionGradient(_ t: Double) -> AngularGradient {
-        AngularGradient(colors: [.orange, .pink, .purple, .indigo, .cyan, .yellow, .orange],
-                        center: .center, angle: .degrees(t * 80))
+        let colors: [Color] = palette.map { p in [p[0], p[1], p[2], p[1], p[0]] }
+            ?? [.orange, .pink, .purple, .indigo, .cyan, .yellow, .orange]
+        return AngularGradient(colors: colors, center: .center, angle: .degrees(t * 80))
     }
 
     @ViewBuilder private func accretion(_ t: Double) -> some View {
@@ -60,7 +63,7 @@ struct BlackHoleEffect: View, Animatable {
     private func photonRing(_ t: Double) -> AngularGradient {
         AngularGradient(stops: [
             .init(color: .clear, location: 0), .init(color: .white, location: 0.07), .init(color: .clear, location: 0.16),
-            .init(color: .clear, location: 0.5), .init(color: Color(red: 0.75, green: 0.85, blue: 1), location: 0.57),
+            .init(color: .clear, location: 0.5), .init(color: palette?[0] ?? Color(red: 0.75, green: 0.85, blue: 1), location: 0.57),
             .init(color: .clear, location: 0.66), .init(color: .clear, location: 1),
         ], center: .center, angle: .degrees(t * 110))
     }
@@ -70,7 +73,7 @@ struct BlackHoleEffect: View, Animatable {
         case .glow:
             ZStack {
                 outline.stroke(Color.black, lineWidth: 28 * intensity).blur(radius: 20 * intensity).opacity(0.9)
-                outline.stroke(Color.white.opacity(0.22), lineWidth: 3).blur(radius: 7)
+                outline.stroke((palette?[1] ?? .white).opacity(0.22), lineWidth: 3).blur(radius: 7)
                 outline.stroke(photonRing(t), lineWidth: 3 * intensity).blur(radius: 3)
             }
             .scaleEffect(1 + 0.012 * sin(t * 2.2) * intensity, anchor: .top)
@@ -84,6 +87,11 @@ struct BlackHoleEffect: View, Animatable {
 
     // MARK: Vortex – counter-rotating dashed spirals flowing into the island
 
+    private var vortexColors: [Color] {
+        let p = palette ?? [.purple, .cyan, .pink]
+        return [p[0], .clear, p[1], .clear, p[2], .clear, p[0]]
+    }
+
     @ViewBuilder private func vortex(_ t: Double) -> some View {
         switch layer {
         case .glow:
@@ -92,7 +100,7 @@ struct BlackHoleEffect: View, Animatable {
                     let kd = Double(k)
                     let dir: Double = k.isMultiple(of: 2) ? 1 : -1
                     outline
-                        .stroke(AngularGradient(colors: [.purple, .clear, .cyan, .clear, .pink, .clear, .purple],
+                        .stroke(AngularGradient(colors: vortexColors,
                                                 center: .center, angle: .degrees(t * (60 + 40 * kd) * dir)),
                                 style: StrokeStyle(lineWidth: (3 + 2 * kd) * intensity, lineCap: .round,
                                                    dash: [10 + 8 * kd, 14 + 6 * kd], dashPhase: t * 40 * (kd + 1) * dir))
@@ -102,7 +110,8 @@ struct BlackHoleEffect: View, Animatable {
                 }
             }
         case .border:
-            outline.stroke(AngularGradient(colors: [.purple, .cyan, .pink, .purple], center: .center, angle: .degrees(-t * 90)),
+            outline.stroke(AngularGradient(colors: palette.map { [$0[0], $0[1], $0[2], $0[0]] } ?? [.purple, .cyan, .pink, .purple],
+                                           center: .center, angle: .degrees(-t * 90)),
                            style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
         }
     }

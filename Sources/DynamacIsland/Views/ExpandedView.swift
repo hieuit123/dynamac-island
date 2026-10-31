@@ -100,58 +100,13 @@ struct HomeView: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            if settings.showMusic { NowPlayingCard(nowPlaying: nowPlaying).frame(maxWidth: .infinity) }
-            if settings.showCalendar { CalendarCard(calendar: calendar).frame(maxWidth: 170) }
-            TimerCard(vm: vm).frame(maxWidth: 170)
-        }
-    }
-}
-
-struct NowPlayingCard: View {
-    @ObservedObject var nowPlaying: NowPlayingService
-
-    var body: some View {
-        Card {
-            HStack(spacing: 12) {
-                artwork
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(nowPlaying.track?.title ?? "Nothing playing")
-                        .font(.system(size: 13, weight: .semibold)).lineLimit(1)
-                    Text(nowPlaying.track.map { $0.artist.isEmpty ? $0.source.rawValue : $0.artist } ?? "Play something in Music or Spotify")
-                        .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
-                    Spacer(minLength: 6)
-                    HStack(spacing: 18) {
-                        control("backward.fill", size: 14) { nowPlaying.previous() }
-                        control(nowPlaying.isPlaying ? "pause.fill" : "play.fill", size: 20) { nowPlaying.playPause() }
-                            .contentTransition(.symbolEffect(.replace))
-                        control("forward.fill", size: 14) { nowPlaying.next() }
-                    }
-                }
-                Spacer(minLength: 0)
+            if settings.showMusic {
+                NowPlayingCard(nowPlaying: nowPlaying, vm: vm, gradientProgress: settings.gradientProgress)
+                    .frame(maxWidth: .infinity)
             }
+            if settings.showCalendar { CalendarCard(calendar: calendar).frame(maxWidth: settings.showMusic ? 150 : .infinity) }
+            TimerCard(vm: vm).frame(maxWidth: settings.showMusic ? 150 : .infinity)
         }
-    }
-
-    private var artwork: some View {
-        Group {
-            if let art = nowPlaying.artwork {
-                Image(nsImage: art).resizable().aspectRatio(contentMode: .fill)
-            } else {
-                LinearGradient(colors: [.purple, .pink], startPoint: .topLeading, endPoint: .bottomTrailing)
-                    .overlay(Image(systemName: "music.note").font(.system(size: 26, weight: .semibold)))
-            }
-        }
-        .frame(width: 78, height: 78)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .scaleEffect(nowPlaying.isPlaying ? 1 : 0.9)
-        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: nowPlaying.isPlaying)
-    }
-
-    private func control(_ symbol: String, size: CGFloat, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol).font(.system(size: size, weight: .semibold)).frame(width: 24, height: 24).contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 }
 

@@ -25,6 +25,8 @@ final class IslandViewModel: ObservableObject {
     @Published private(set) var isSuspended = false { didSet { updateEffectMount() } }
     /// Keeps the effect alive while it fades out, then removes it so an idle island costs no GPU time.
     @Published private(set) var isEffectMounted = false
+    /// Horizontal artwork offset driven by the swipe-to-skip gesture.
+    @Published var swipeOffset: CGFloat = 0
     @Published var isDraggingOut = false { didSet { if !isDraggingOut { scheduleCollapse(after: 0.8) } } }
     @Published var isDropTargeted = false {
         didSet {

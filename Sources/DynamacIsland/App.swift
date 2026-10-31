@@ -65,13 +65,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private lazy var hudState = HUDPermissionState(keys: mediaKeys)
     private let power = PowerStateMonitor()
     private var island: IslandController?
+    private var swipeMonitor: SwipeSkipMonitor?
     private var statusItem: NSStatusItem?
     private var settingsWindow: NSWindow?
     private var cancellables = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         vm.openSettings = { [weak self] in self?.showSettings() }
-        vm.onExpand = { [weak self] in self?.calendar.refresh() }
+        vm.onExpand = { [weak self] in
+            self?.calendar.refresh()
+            self?.nowPlaying.refreshDetails()
+        }
         battery.onPluggedIn = { [weak self] in
             guard let self, self.settings.showBattery else { return }
             self.vm.showTransient(.charging(level: self.battery.level))
@@ -81,6 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let root = IslandRootView(vm: vm, settings: settings, nowPlaying: nowPlaying, battery: battery,
                                   calendar: calendar, shelf: shelf)
         island = IslandController(vm: vm, settings: settings, content: root)
+        swipeMonitor = SwipeSkipMonitor(vm: vm, nowPlaying: nowPlaying, settings: settings)
 
         mediaKeys.handler = { [weak self] key, isDown, fine in
             self?.handleMediaKey(key, isDown: isDown, fine: fine) ?? false

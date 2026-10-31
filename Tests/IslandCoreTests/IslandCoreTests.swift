@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import Testing
 @testable import IslandCore
@@ -73,5 +74,34 @@ import Testing
     @Test func formats() {
         #expect(CountdownTimer.format(59.2) == "1:00")
         #expect(CountdownTimer.format(3725) == "1:02:05")
+    }
+}
+
+@Suite struct ArtworkPaletteTests {
+    private func image(_ halves: [(UInt8, UInt8, UInt8)]) -> CGImage {
+        let w = 20, h = 20
+        var px = [UInt8](repeating: 255, count: w * h * 4)
+        for y in 0..<h { for x in 0..<w {
+            let c = halves[x < w / 2 ? 0 : halves.count - 1]
+            let i = (y * w + x) * 4
+            px[i] = c.0; px[i + 1] = c.1; px[i + 2] = c.2
+        } }
+        let ctx = CGContext(data: &px, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                            space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        return ctx.makeImage()!
+    }
+
+    @Test func picksDistinctDominantHues() {
+        let colors = ArtworkPalette.extract(from: image([(220, 30, 30), (30, 40, 210)]))
+        #expect(colors.count == 3)
+        #expect(colors.contains { $0.r > 0.7 && $0.b < 0.4 })
+        #expect(colors.contains { $0.b > 0.7 && $0.r < 0.4 })
+    }
+
+    @Test func grayscaleArtworkStaysNeutralAndBright() {
+        let colors = ArtworkPalette.extract(from: image([(20, 20, 20), (200, 200, 200)]))
+        #expect(colors[0].hsb.s <= 0.16)
+        #expect(colors[0].hsb.v >= 0.85)
     }
 }

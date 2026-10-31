@@ -29,6 +29,11 @@ struct IslandRootView: View {
         return nil
     }
 
+    private var effectPalette: [Color]? {
+        guard settings.albumTintedEffects, settings.showMusic, nowPlaying.isPlaying, nowPlaying.track != nil else { return nil }
+        return nowPlaying.palette
+    }
+
     private var radii: (top: CGFloat, bottom: CGFloat) {
         switch vm.state {
         case .expanded: return (14, 32)
@@ -61,7 +66,7 @@ struct IslandRootView: View {
             ZStack {
                 if vm.isEffectMounted {
                     BlackHoleEffect(style: settings.effectStyle, intensity: vm.effectIntensity,
-                                    topRadius: r.top, bottomRadius: r.bottom, layer: .glow)
+                                    topRadius: r.top, bottomRadius: r.bottom, layer: .glow, palette: effectPalette)
                         .transition(.opacity)
                 }
                 shape.fill(Color.black)
@@ -70,7 +75,7 @@ struct IslandRootView: View {
         .overlay {
             if vm.isEffectMounted {
                 BlackHoleEffect(style: settings.effectStyle, intensity: vm.effectIntensity,
-                                topRadius: r.top, bottomRadius: r.bottom, layer: .border)
+                                topRadius: r.top, bottomRadius: r.bottom, layer: .border, palette: effectPalette)
                     .transition(.opacity)
             }
         }
@@ -110,7 +115,7 @@ struct IslandRootView: View {
                 .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .top)))
         } else if let activity {
             CollapsedActivityView(activity: activity, vm: vm, nowPlaying: nowPlaying,
-                                  isPeeking: vm.state == .peek)
+                                  isPeeking: vm.state == .peek, animatedWaveform: settings.animatedWaveform)
                 .frame(height: vm.notchSize.height)
                 .padding(.horizontal, flare + 10)
                 .transition(.opacity)
@@ -123,6 +128,7 @@ struct CollapsedActivityView: View {
     @ObservedObject var vm: IslandViewModel
     @ObservedObject var nowPlaying: NowPlayingService
     let isPeeking: Bool
+    let animatedWaveform: Bool
 
     var body: some View {
         HStack(spacing: 0) {
@@ -146,16 +152,9 @@ struct CollapsedActivityView: View {
         case .timer:
             Image(systemName: "timer").foregroundStyle(.orange)
         case .music:
-            Group {
-                if let art = nowPlaying.artwork {
-                    Image(nsImage: art).resizable().aspectRatio(contentMode: .fill)
-                } else {
-                    Image(systemName: "music.note").font(.system(size: 11)).frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(Color.white.opacity(0.15))
-                }
-            }
-            .frame(width: 22, height: 22)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            AlbumArtwork(image: nowPlaying.artwork, palette: nowPlaying.palette, isPlaying: nowPlaying.isPlaying,
+                         size: 22, cornerRadius: 6, trackID: nowPlaying.track.map { $0.title + $0.artist } ?? "")
+                .offset(x: vm.swipeOffset * 0.3)
         }
     }
 
@@ -181,9 +180,7 @@ struct CollapsedActivityView: View {
             .foregroundStyle(.orange)
             .frame(width: 44, alignment: .trailing)
         case .music:
-            Image(systemName: "waveform")
-                .foregroundStyle(.pink)
-                .symbolEffect(.variableColor.iterative, isActive: isPeeking)
+            MusicWaveform(palette: nowPlaying.palette, animate: animatedWaveform && nowPlaying.isPlaying)
         }
     }
 }

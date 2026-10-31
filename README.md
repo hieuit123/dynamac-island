@@ -6,7 +6,13 @@ A native macOS Dynamic Island inspired by [Alcove](https://tryalcove.com), with 
 - **Island at the notch** (or a pill on non-notch displays): hover to peek, click to expand.
 - **Black-hole effects**: Accretion Disk, Event Horizon or Vortex. Choose one in Settings. They show on hover and in the expanded popup, and get stronger while files are dragged over.
 - **Shelf**: drop files into the island and drag them out to any app or screen. Dragging out copies the file, and double-click opens it. The shelf stores references to the original files and keeps them across restarts.
-- **Now Playing**: Music & Spotify title, artwork and controls (event-driven).
+- **Now Playing**: Music & Spotify, event-driven:
+  - The player takes its colors from the album art: a blurred artwork background, tinted controls, and a gradient progress bar you can drag to seek.
+  - Shuffle, repeat (repeat-one in Apple Music) and favorite (Apple Music).
+  - The artwork gets a glare sweep on hover and track change, and dims and shrinks when paused.
+  - The collapsed island shows an animated waveform in the album's colors (about 15 fps, only while playing; frozen in Low Power Mode).
+  - Swipe left/right with two fingers on the island to skip tracks.
+  - The black-hole effect can take on the album colors while music plays.
 - **Calendar**: next event in the next 24 h (EventKit).
 - **Battery**: level, charging state, and a charging live activity when you plug in.
 - **Clock & Timer**: presets with a countdown in the collapsed island.

@@ -27,8 +27,8 @@ final class IslandHostingView<Content: View>: NSHostingView<Content> {
 
 enum IslandMetrics {
     /// Fixed transparent window; fully transparent pixels are click-through, so only the island captures input.
-    static let windowSize = CGSize(width: 820, height: 340)
-    static let expandedSize = CGSize(width: 640, height: 232)
+    static let windowSize = CGSize(width: 900, height: 340)
+    static let expandedSize = CGSize(width: 740, height: 236)
 }
 
 extension NSScreen {
