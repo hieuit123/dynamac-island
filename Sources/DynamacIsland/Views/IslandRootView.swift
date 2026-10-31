@@ -230,7 +230,8 @@ struct CollapsedActivityView: View {
             }
             .monospacedDigit()
             .foregroundStyle(.orange)
-            .frame(width: 44, alignment: .trailing)
+            .frame(minWidth: 44, alignment: .trailing)
+            .fixedSize()
         case let .event(event):
             TimelineView(.everyMinute) { context in
                 let minutes = Int(ceil(event.start.timeIntervalSince(context.date) / 60))

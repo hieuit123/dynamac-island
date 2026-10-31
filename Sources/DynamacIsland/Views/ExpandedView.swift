@@ -241,20 +241,15 @@ struct TimerPanel: View {
             HStack(spacing: 18) {
                 ZStack {
                     Circle().stroke(Color.orange.opacity(0.18), lineWidth: 6)
-                    TimelineView(.animation(minimumInterval: 1, paused: center.timer.endDate == nil)) { context in
-                        let fraction = center.timer.duration > 0 ? center.timer.remaining(now: context.date) / center.timer.duration : 0
-                        Circle()
-                            .trim(from: 0, to: fraction)
-                            .stroke(Color.orange, style: StrokeStyle(lineWidth: 6, lineCap: .round))
-                            .rotationEffect(.degrees(-90))
-                            .animation(.linear(duration: 1), value: fraction)
-                    }
+                    CountdownRing(state: center.timer.state, duration: center.timer.duration)
                     timeText
                 }
                 .frame(width: 118, height: 118)
 
                 VStack(alignment: .leading, spacing: 10) {
                     if center.timer.isActive {
+                        Text(center.timer.endDate == nil ? "Paused" : "Running")
+                            .font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
                         HStack(spacing: 10) {
                             let paused = center.timer.endDate == nil
                             pill(paused ? "Resume" : "Pause", symbol: paused ? "play.fill" : "pause.fill") {
@@ -279,6 +274,9 @@ struct TimerPanel: View {
                         }
                     }
                 }
+                // Fixed width so the ring doesn't jump sideways when switching between presets and controls.
+                .frame(width: 330, alignment: .leading)
+                .animation(.easeInOut(duration: 0.2), value: center.timer.isActive)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -356,5 +354,50 @@ struct BatteryPanel: View {
         if battery.isPluggedIn { return .green }
         if battery.isLowPowerMode { return .yellow }
         return battery.level <= 20 ? .red : .white
+    }
+}
+
+/// Progress ring driven by one linear animation to zero over the remaining time, so it moves smoothly
+/// while Core Animation does the work (no per-second SwiftUI updates).
+private struct CountdownRing: View {
+    let state: CountdownTimer.State
+    let duration: TimeInterval
+    @State private var fraction: Double = 0
+    @State private var generation = 0
+
+    var body: some View {
+        Circle()
+            .trim(from: 0, to: fraction)
+            .stroke(Color.orange, style: StrokeStyle(lineWidth: 6, lineCap: .round))
+            .rotationEffect(.degrees(-90))
+            .onAppear(perform: sync)
+            .onChange(of: state) { sync() }
+    }
+
+    private func sync() {
+        let now = Date()
+        generation += 1
+        let token = generation
+        let current: Double
+        switch state {
+        case .idle: current = 0
+        case let .running(end): current = duration > 0 ? max(end.timeIntervalSince(now), 0) / duration : 0
+        case let .paused(remaining): current = duration > 0 ? remaining / duration : 0
+        }
+        let isStart = fraction == 0 && current > 0
+        if isStart {
+            // Fill the ring once on start, then begin the countdown.
+            withAnimation(.easeOut(duration: 0.35)) { fraction = current }
+        } else {
+            var t = Transaction()
+            t.disablesAnimations = true
+            withTransaction(t) { fraction = current }
+        }
+        guard case let .running(end) = state else { return }
+        let delay = isStart ? 0.35 : 0
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            guard token == generation else { return }
+            withAnimation(.linear(duration: max(end.timeIntervalSinceNow, 0))) { fraction = 0 }
+        }
     }
 }
