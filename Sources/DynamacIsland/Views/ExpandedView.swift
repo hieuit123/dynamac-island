@@ -241,7 +241,11 @@ struct TimerPanel: View {
             HStack(spacing: 18) {
                 ZStack {
                     Circle().stroke(Color.orange.opacity(0.18), lineWidth: 6)
-                    CountdownRing(state: center.timer.state, duration: center.timer.duration)
+                    // Removed when idle: a running linear animation already targets 0 and can't be "reset" to 0.
+                    if center.timer.isActive {
+                        CountdownRing(state: center.timer.state, duration: center.timer.duration)
+                            .transition(.opacity)
+                    }
                     timeText
                 }
                 .frame(width: 118, height: 118)
