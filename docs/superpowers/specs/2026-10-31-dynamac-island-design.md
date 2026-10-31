@@ -3,7 +3,7 @@
 Native macOS (14+) Dynamic-Island-style app inspired by Alcove. Swift 6, SwiftUI + AppKit, built with SwiftPM and bundled into `Dynamac Island.app` (LSUIElement, ad-hoc signed).
 
 ## Window
-- Borderless, non-activating `NSPanel` at `.statusBar+` level, top-center of the selected display (default: main/built-in). Joins all spaces, ignores Mission Control.
+- Borderless, non-activating `NSPanel` at `.statusBar+` level, top-center of the selected display (default: primary display with the menu bar). Joins all spaces, ignores Mission Control.
 - Notch screens: collapsed size matches notch (`safeAreaInsets`/`auxiliaryTopLeftArea`). Non-notch: small black pill.
 - States: `collapsed` → `hovered` (slightly enlarged, live activity glance) → `expanded` (click; detail popup). Mouse-exit collapses after 0.4 s.
 - Window frame is fixed at max size; click-through outside the island shape via `ignoresMouseEvents` toggling driven by a global mouse-moved monitor only near the island area.

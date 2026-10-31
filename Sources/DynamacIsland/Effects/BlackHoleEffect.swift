@@ -1,0 +1,102 @@
+import SwiftUI
+
+/// Animated "black hole" border. Only instantiated while the island is hovered / expanded / drop-targeted,
+/// so the TimelineView (and GPU work) stops completely when the island is idle.
+struct BlackHoleEffect: View {
+    enum Layer { case glow, border }
+
+    let style: EffectStyle
+    let intensity: Double
+    let topRadius: CGFloat
+    let bottomRadius: CGFloat
+    let layer: Layer
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var outline: NotchShape { NotchShape(topRadius: topRadius, bottomRadius: bottomRadius, closed: false) }
+
+    var body: some View {
+        let interval = ProcessInfo.processInfo.isLowPowerModeEnabled ? 1.0 / 30 : 1.0 / 60
+        TimelineView(.animation(minimumInterval: interval, paused: reduceMotion)) { context in
+            let t = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 3600)
+            switch style {
+            case .accretion: accretion(t)
+            case .eventHorizon: eventHorizon(t)
+            case .vortex: vortex(t)
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    // MARK: Accretion disk – hot rotating ring of light
+
+    private func accretionGradient(_ t: Double) -> AngularGradient {
+        AngularGradient(colors: [.orange, .pink, .purple, .indigo, .cyan, .yellow, .orange],
+                        center: .center, angle: .degrees(t * 80))
+    }
+
+    @ViewBuilder private func accretion(_ t: Double) -> some View {
+        let g = accretionGradient(t)
+        switch layer {
+        case .glow:
+            ZStack {
+                outline.stroke(g, lineWidth: 12 * intensity).blur(radius: 16 * intensity).opacity(0.65)
+                outline.stroke(g, lineWidth: 4 * intensity).blur(radius: 4).opacity(0.9)
+            }
+        case .border:
+            outline.stroke(g, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+        }
+    }
+
+    // MARK: Event horizon – dark lensing shadow and a shimmering photon ring
+
+    private func photonRing(_ t: Double) -> AngularGradient {
+        AngularGradient(stops: [
+            .init(color: .clear, location: 0), .init(color: .white, location: 0.07), .init(color: .clear, location: 0.16),
+            .init(color: .clear, location: 0.5), .init(color: Color(red: 0.75, green: 0.85, blue: 1), location: 0.57),
+            .init(color: .clear, location: 0.66), .init(color: .clear, location: 1),
+        ], center: .center, angle: .degrees(t * 110))
+    }
+
+    @ViewBuilder private func eventHorizon(_ t: Double) -> some View {
+        switch layer {
+        case .glow:
+            ZStack {
+                outline.stroke(Color.black, lineWidth: 28 * intensity).blur(radius: 20 * intensity).opacity(0.9)
+                outline.stroke(Color.white.opacity(0.22), lineWidth: 3).blur(radius: 7)
+                outline.stroke(photonRing(t), lineWidth: 3 * intensity).blur(radius: 3)
+            }
+            .scaleEffect(1 + 0.012 * sin(t * 2.2) * intensity, anchor: .top)
+        case .border:
+            ZStack {
+                outline.stroke(Color.white.opacity(0.16), lineWidth: 1)
+                outline.stroke(photonRing(t), style: StrokeStyle(lineWidth: 1.4, lineCap: .round))
+            }
+        }
+    }
+
+    // MARK: Vortex – counter-rotating dashed spirals flowing into the island
+
+    @ViewBuilder private func vortex(_ t: Double) -> some View {
+        switch layer {
+        case .glow:
+            ZStack {
+                ForEach(0..<3, id: \.self) { k in
+                    let kd = Double(k)
+                    let dir: Double = k.isMultiple(of: 2) ? 1 : -1
+                    outline
+                        .stroke(AngularGradient(colors: [.purple, .clear, .cyan, .clear, .pink, .clear, .purple],
+                                                center: .center, angle: .degrees(t * (60 + 40 * kd) * dir)),
+                                style: StrokeStyle(lineWidth: (3 + 2 * kd) * intensity, lineCap: .round,
+                                                   dash: [10 + 8 * kd, 14 + 6 * kd], dashPhase: t * 40 * (kd + 1) * dir))
+                        .blur(radius: kd * 3 + 1)
+                        .scaleEffect(1 + kd * 0.035 * intensity, anchor: .top)
+                        .opacity(0.9 - kd * 0.22)
+                }
+            }
+        case .border:
+            outline.stroke(AngularGradient(colors: [.purple, .cyan, .pink, .purple], center: .center, angle: .degrees(-t * 90)),
+                           style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+        }
+    }
+}
