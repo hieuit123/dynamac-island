@@ -31,6 +31,7 @@ struct AlbumArtwork: View {
         }
         .frame(width: size, height: size)
         .clipShape(shape)
+        .contentShape(shape)
         .overlay(shape.strokeBorder(Color.white.opacity(0.12), lineWidth: 0.5))
         .saturation(isPlaying ? 1 : 0.35)
         .opacity(isPlaying ? 1 : 0.6)
@@ -259,6 +260,7 @@ struct NowPlayingCard: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .background(ambient)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
             .strokeBorder(LinearGradient(colors: [palette[0].opacity(0.45), .clear, palette[2].opacity(0.3)],
                                          startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 0.8))
@@ -284,6 +286,8 @@ struct NowPlayingCard: View {
                            startPoint: .topLeading, endPoint: .bottomTrailing)
             LinearGradient(colors: [.black.opacity(0.1), .black.opacity(0.55)], startPoint: .top, endPoint: .bottom)
         }
+        // The fill-scaled artwork overflows the card; clipping is visual only, so it must not take clicks.
+        .allowsHitTesting(false)
     }
 
     private func iconButton(_ symbol: String, size: CGFloat, tint: Color = .white, action: @escaping () -> Void) -> some View {
@@ -301,6 +305,7 @@ struct NowPlayingCard: View {
 struct PressableStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
+            .contentShape(Rectangle())
             .scaleEffect(configuration.isPressed ? 0.82 : 1)
             .animation(.spring(response: 0.2, dampingFraction: 0.6), value: configuration.isPressed)
     }

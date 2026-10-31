@@ -33,7 +33,7 @@ struct ShelfView: View {
                         }
                         .fixedSize()
                         Button("Clear") { shelf.clear() }
-                            .buttonStyle(.plain)
+                            .buttonStyle(PressableStyle())
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(.secondary)
                     }
@@ -68,7 +68,7 @@ private struct ShelfTile: View {
             Button(action: onRemove) {
                 Image(systemName: "xmark.circle.fill").font(.system(size: 13)).foregroundStyle(.white.opacity(0.55))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressableStyle())
             .padding(3)
         }
         .help(url?.path ?? item.name)
@@ -78,20 +78,13 @@ private struct ShelfTile: View {
 /// Shown while files hover over the island: a spinning singularity pulling them in.
 private struct DropZone: View {
     let active: Bool
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     var body: some View {
         RoundedRectangle(cornerRadius: 16, style: .continuous)
             .strokeBorder(Color.white.opacity(active ? 0.5 : 0.2), style: StrokeStyle(lineWidth: 1.5, dash: [6, 5]))
             .overlay {
-                VStack(spacing: 8) {
-                    TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !active || reduceMotion)) { ctx in
-                        Image(systemName: "hurricane")
-                            .font(.system(size: 30, weight: .semibold))
-                            .foregroundStyle(AngularGradient(colors: [.purple, .cyan, .pink, .purple], center: .center))
-                            .rotationEffect(.degrees(-ctx.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 360) * 240))
-                            .scaleEffect(active ? 1.15 : 1)
-                    }
+                VStack(spacing: 2) {
+                    BlackHoleIcon(size: active ? 84 : 64, spinning: active)
+                        .animation(.spring(response: 0.4, dampingFraction: 0.7), value: active)
                     Text(active ? "Release to drop into the black hole" : "Drop files into the black hole")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(active ? .white : .secondary)

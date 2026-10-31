@@ -3,7 +3,7 @@ import Combine
 import IslandCore
 
 enum IslandState { case collapsed, peek, expanded }
-enum ExpandedTab { case home, shelf }
+enum ExpandedTab { case home, shelf, calendar, timer }
 
 enum HUDKind: Equatable {
     case volume(level: Float, muted: Bool)
@@ -45,7 +45,6 @@ final class IslandViewModel: ObservableObject {
     @Published var notchSize = CGSize(width: 190, height: 32)
     @Published var hasNotch = false
 
-    var openSettings: () -> Void = {}
     var mouseInsideProbe: () -> Bool = { false }
     var onExpand: () -> Void = {}
 

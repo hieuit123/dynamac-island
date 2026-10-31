@@ -71,7 +71,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var cancellables = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        vm.openSettings = { [weak self] in self?.showSettings() }
         vm.onExpand = { [weak self] in
             self?.calendar.refresh()
             self?.nowPlaying.refreshDetails()

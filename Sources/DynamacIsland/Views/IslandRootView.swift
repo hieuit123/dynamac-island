@@ -86,7 +86,8 @@ struct IslandRootView: View {
         .background(HoverTracker(onChange: { vm.hoverChanged($0) },
                                  onMake: { view in vm.mouseInsideProbe = { [weak view] in view?.isMouseInside ?? false } }))
         .contentShape(Rectangle())
-        .onTapGesture { if vm.state != .expanded { vm.expand() } }
+        // Tap-to-expand only while collapsed/peeking; when expanded, buttons inside must get the clicks.
+        .gesture(TapGesture().onEnded { vm.expand() }, including: vm.state == .expanded ? .subviews : .all)
         .onDrop(of: [.fileURL], isTargeted: $vm.isDropTargeted) { providers in
             for provider in providers {
                 _ = provider.loadObject(ofClass: URL.self) { url, _ in

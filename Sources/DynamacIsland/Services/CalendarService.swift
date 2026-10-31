@@ -15,7 +15,8 @@ final class CalendarService: ObservableObject {
     }
 
     @Published private(set) var access: Access
-    @Published private(set) var nextEvent: EventInfo?
+    @Published private(set) var upcoming: [EventInfo] = []
+    var nextEvent: EventInfo? { upcoming.first }
 
     private let store = EKEventStore()
     private var observer: NSObjectProtocol?
@@ -54,13 +55,13 @@ final class CalendarService: ObservableObject {
 
     /// Cheap on-demand query; called when the island expands and when the store changes.
     func refresh() {
-        guard access == .granted else { nextEvent = nil; return }
+        guard access == .granted else { upcoming = []; return }
         let now = Date()
         let predicate = store.predicateForEvents(withStart: now, end: now.addingTimeInterval(24 * 3600), calendars: nil)
         let events = store.events(matching: predicate)
             .filter { $0.endDate > now }
             .sorted { ($0.isAllDay ? 1 : 0, $0.startDate) < ($1.isAllDay ? 1 : 0, $1.startDate) }
-        nextEvent = events.first.map {
+        upcoming = events.prefix(3).map {
             EventInfo(title: $0.title ?? "Event", start: $0.startDate, end: $0.endDate,
                       isAllDay: $0.isAllDay, color: $0.calendar.map { NSColor(cgColor: $0.cgColor) ?? .systemBlue } ?? .systemBlue)
         }
