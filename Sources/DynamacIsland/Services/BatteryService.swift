@@ -9,10 +9,20 @@ final class BatteryService: ObservableObject {
     @Published private(set) var level = 0
     @Published private(set) var isCharging = false
     @Published private(set) var isPluggedIn = false
+    /// Minutes until empty / full; nil while macOS is still calculating.
+    @Published private(set) var minutesToEmpty: Int?
+    @Published private(set) var minutesToFull: Int?
+    @Published private(set) var isLowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
 
     var onPluggedIn: (() -> Void)?
+    var onLowBattery: ((Int) -> Void)?
+    var onLowPowerModeChange: ((Bool) -> Void)?
+
+    private static let lowThresholds = [20, 10, 5]
     private var runLoopSource: CFRunLoopSource?
     private var initialized = false
+    private var alertedThresholds = Set<Int>()
+    private var powerObserver: NSObjectProtocol?
 
     init() {
         let context = Unmanaged.passUnretained(self).toOpaque()
@@ -23,6 +33,16 @@ final class BatteryService: ObservableObject {
         }, context)?.takeRetainedValue() {
             runLoopSource = source
             CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
+        }
+        powerObserver = NotificationCenter.default.addObserver(forName: .NSProcessInfoPowerStateDidChange, object: nil,
+                                                               queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                let enabled = ProcessInfo.processInfo.isLowPowerModeEnabled
+                guard enabled != self.isLowPowerMode else { return }
+                self.isLowPowerMode = enabled
+                self.onLowPowerModeChange?(enabled)
+            }
         }
         update()
         initialized = true
@@ -37,6 +57,20 @@ final class BatteryService: ObservableObject {
         case ..<88: return "battery.75percent"
         default: return "battery.100percent"
         }
+    }
+
+    var statusText: String {
+        if isPluggedIn {
+            if level >= 100 || (!isCharging && level >= 80) { return isCharging ? "Charged" : "On power adapter" }
+            guard let minutes = minutesToFull else { return "Charging — calculating…" }
+            return "Charging — \(Self.format(minutes)) until full"
+        }
+        guard let minutes = minutesToEmpty else { return "On battery — calculating…" }
+        return "\(Self.format(minutes)) remaining"
+    }
+
+    private static func format(_ minutes: Int) -> String {
+        minutes >= 60 ? "\(minutes / 60)h \(minutes % 60)m" : "\(minutes)m"
     }
 
     private func update() {
@@ -56,8 +90,20 @@ final class BatteryService: ObservableObject {
             level = Int((Double(current) / Double(maxCap) * 100).rounded())
             isCharging = desc[kIOPSIsChargingKey] as? Bool ?? false
             isPluggedIn = desc[kIOPSPowerSourceStateKey] as? String == kIOPSACPowerValue
+            let toEmpty = desc[kIOPSTimeToEmptyKey] as? Int ?? -1
+            let toFull = desc[kIOPSTimeToFullChargeKey] as? Int ?? -1
+            minutesToEmpty = toEmpty > 0 ? toEmpty : nil
+            minutesToFull = toFull > 0 ? toFull : nil
         }
         hasBattery = found
-        if initialized, found, isPluggedIn, !wasPlugged { onPluggedIn?() }
+        guard found else { return }
+        if initialized, isPluggedIn, !wasPlugged { onPluggedIn?() }
+        if isPluggedIn {
+            alertedThresholds.removeAll()
+        } else if let threshold = Self.lowThresholds.filter({ level <= $0 }).min(), !alertedThresholds.contains(threshold) {
+            // Mark every crossed threshold so we alert once per level, not again for higher ones.
+            Self.lowThresholds.filter { level <= $0 }.forEach { alertedThresholds.insert($0) }
+            if initialized { onLowBattery?(level) }
+        }
     }
 }

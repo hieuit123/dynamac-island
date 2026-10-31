@@ -14,6 +14,7 @@
 	<key>NSHighResolutionCapable</key><true/>
 	<key>NSSupportsAutomaticGraphicsSwitching</key><true/>
 	<key>NSCalendarsFullAccessUsageDescription</key><string>Dynamac Island shows your next calendar event in the island.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key><string>Dynamac Island shows when AirPods and other Bluetooth devices connect, with their battery level.</string>
 	<key>NSAppleEventsUsageDescription</key><string>Dynamac Island reads the current track and controls playback in Music and Spotify.</string>
 </dict>
 </plist>

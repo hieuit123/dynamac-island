@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ExpandedView: View {
     @ObservedObject var vm: IslandViewModel
+    @ObservedObject var center: ActivityCenter
     @ObservedObject var settings: AppSettings
     @ObservedObject var nowPlaying: NowPlayingService
     @ObservedObject var battery: BatteryService
@@ -14,10 +15,11 @@ struct ExpandedView: View {
             header.frame(height: vm.notchSize.height)
             Group {
                 switch vm.tab {
-                case .home: HomeView(vm: vm, settings: settings, nowPlaying: nowPlaying)
+                case .home: HomeView(vm: vm, center: center, settings: settings, nowPlaying: nowPlaying)
                 case .shelf: ShelfView(vm: vm, shelf: shelf)
                 case .calendar: CalendarPanel(calendar: calendar)
-                case .timer: TimerPanel(vm: vm)
+                case .timer: TimerPanel(center: center)
+                case .battery: BatteryPanel(battery: battery)
                 }
             }
             .transition(.opacity.combined(with: .scale(scale: 0.97)))
@@ -46,14 +48,21 @@ struct ExpandedView: View {
                                badge: calendar.nextEvent.map { Color(nsColor: $0.color) }) { toggle(.calendar) }
                 }
                 HeaderIcon(symbol: "timer", selected: vm.tab == .timer,
-                           badge: vm.timer.isActive ? .orange : nil) { toggle(.timer) }
+                           badge: center.timer.isActive ? .orange : nil) { toggle(.timer) }
                 if settings.showBattery, battery.hasBattery {
-                    HStack(spacing: 3) {
-                        Text("\(battery.level)%").font(.system(size: 11, weight: .medium)).monospacedDigit()
-                        Image(systemName: battery.symbolName)
-                            .foregroundStyle(battery.isPluggedIn ? .green : battery.level <= 20 ? .red : .white)
+                    Button { toggle(.battery) } label: {
+                        HStack(spacing: 3) {
+                            Text("\(battery.level)%").font(.system(size: 11, weight: .medium)).monospacedDigit()
+                            Image(systemName: battery.symbolName)
+                                .foregroundStyle(battery.isPluggedIn ? .green : battery.level <= 20 ? .red : battery.isLowPowerMode ? .yellow : .white)
+                        }
+                        .padding(.horizontal, 7)
+                        .frame(height: 22)
+                        .background(Capsule().fill(Color.white.opacity(vm.tab == .battery ? 0.16 : 0)))
+                        .contentShape(Capsule())
                     }
-                    .padding(.leading, 4)
+                    .buttonStyle(PressableStyle())
+                    .padding(.leading, 2)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
@@ -125,12 +134,13 @@ struct Card<Content: View>: View {
 
 struct HomeView: View {
     @ObservedObject var vm: IslandViewModel
+    @ObservedObject var center: ActivityCenter
     @ObservedObject var settings: AppSettings
     @ObservedObject var nowPlaying: NowPlayingService
 
     var body: some View {
         if settings.showMusic {
-            NowPlayingCard(nowPlaying: nowPlaying, vm: vm, gradientProgress: settings.gradientProgress)
+            NowPlayingCard(nowPlaying: nowPlaying, vm: vm, settings: settings)
         } else {
             Card {
                 VStack(spacing: 4) {
@@ -154,8 +164,12 @@ struct CalendarPanel: View {
         Card {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text(Date(), format: .dateTime.weekday(.wide).day().month(.wide))
-                        .font(.system(size: 13, weight: .bold))
+                    Button { calendar.open(nil) } label: {
+                        Text(Date(), format: .dateTime.weekday(.wide).day().month(.wide))
+                            .font(.system(size: 13, weight: .bold))
+                    }
+                    .buttonStyle(PressableStyle())
+                    .help("Open calendar")
                     Spacer()
                     Text("Next 24 hours").font(.system(size: 11)).foregroundStyle(.secondary)
                 }
@@ -174,7 +188,8 @@ struct CalendarPanel: View {
                     } else {
                         VStack(alignment: .leading, spacing: 6) {
                             ForEach(Array(calendar.upcoming.enumerated()), id: \.offset) { _, event in
-                                EventRow(event: event)
+                                Button { calendar.open(event) } label: { EventRow(event: event) }
+                                    .buttonStyle(PressableStyle())
                             }
                         }
                     }
@@ -218,7 +233,7 @@ private struct EventRow: View {
 // MARK: Timer
 
 struct TimerPanel: View {
-    @ObservedObject var vm: IslandViewModel
+    @ObservedObject var center: ActivityCenter
     private let presets: [Double] = [1, 3, 5, 10, 15, 25, 45, 60]
 
     var body: some View {
@@ -226,8 +241,8 @@ struct TimerPanel: View {
             HStack(spacing: 18) {
                 ZStack {
                     Circle().stroke(Color.orange.opacity(0.18), lineWidth: 6)
-                    TimelineView(.animation(minimumInterval: 1, paused: vm.timer.endDate == nil)) { context in
-                        let fraction = vm.timer.duration > 0 ? vm.timer.remaining(now: context.date) / vm.timer.duration : 0
+                    TimelineView(.animation(minimumInterval: 1, paused: center.timer.endDate == nil)) { context in
+                        let fraction = center.timer.duration > 0 ? center.timer.remaining(now: context.date) / center.timer.duration : 0
                         Circle()
                             .trim(from: 0, to: fraction)
                             .stroke(Color.orange, style: StrokeStyle(lineWidth: 6, lineCap: .round))
@@ -239,19 +254,19 @@ struct TimerPanel: View {
                 .frame(width: 118, height: 118)
 
                 VStack(alignment: .leading, spacing: 10) {
-                    if vm.timer.isActive {
+                    if center.timer.isActive {
                         HStack(spacing: 10) {
-                            let paused = vm.timer.endDate == nil
+                            let paused = center.timer.endDate == nil
                             pill(paused ? "Resume" : "Pause", symbol: paused ? "play.fill" : "pause.fill") {
-                                paused ? vm.resumeTimer() : vm.pauseTimer()
+                                paused ? center.resumeTimer() : center.pauseTimer()
                             }
-                            pill("Cancel", symbol: "xmark", tint: .white.opacity(0.7)) { vm.stopTimer() }
+                            pill("Cancel", symbol: "xmark", tint: .white.opacity(0.7)) { center.stopTimer() }
                         }
                     } else {
                         Text("Start a timer").font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
                             ForEach(presets, id: \.self) { minutes in
-                                Button { vm.startTimer(minutes: minutes) } label: {
+                                Button { center.startTimer(minutes: minutes) } label: {
                                     Text(minutes >= 60 ? "1h" : "\(Int(minutes))m")
                                         .font(.system(size: 12, weight: .semibold))
                                         .frame(maxWidth: .infinity).padding(.vertical, 7)
@@ -271,7 +286,7 @@ struct TimerPanel: View {
 
     @ViewBuilder private var timeText: some View {
         Group {
-            switch vm.timer.state {
+            switch center.timer.state {
             case .idle: Text("0:00").opacity(0.4)
             case let .running(end): Text(timerInterval: Date()...end, countsDown: true)
             case let .paused(remaining): Text(CountdownTimer.format(remaining)).opacity(0.6)
@@ -294,5 +309,52 @@ struct TimerPanel: View {
                 .contentShape(Capsule())
         }
         .buttonStyle(PressableStyle())
+    }
+}
+
+// MARK: Battery
+
+struct BatteryPanel: View {
+    @ObservedObject var battery: BatteryService
+
+    var body: some View {
+        Card {
+            HStack(spacing: 22) {
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.35), lineWidth: 2.5)
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(LinearGradient(colors: [fill.opacity(0.75), fill], startPoint: .leading, endPoint: .trailing))
+                        .frame(width: max(CGFloat(battery.level) / 100 * 128, 6))
+                        .padding(5)
+                    if battery.isPluggedIn {
+                        Image(systemName: "bolt.fill").font(.system(size: 26, weight: .bold))
+                            .frame(maxWidth: .infinity)
+                            .shadow(radius: 4)
+                    }
+                }
+                .frame(width: 138, height: 68)
+                .overlay(alignment: .trailing) {
+                    Capsule().fill(Color.white.opacity(0.35)).frame(width: 5, height: 22).offset(x: 7)
+                }
+                .animation(.spring(response: 0.5, dampingFraction: 0.8), value: battery.level)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("\(battery.level)%").font(.system(size: 34, weight: .bold, design: .rounded)).monospacedDigit()
+                    Text(battery.statusText).font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
+                    if battery.isLowPowerMode {
+                        Label("Low Power Mode", systemImage: "leaf.fill")
+                            .font(.system(size: 11, weight: .semibold)).foregroundStyle(.yellow)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private var fill: Color {
+        if battery.isPluggedIn { return .green }
+        if battery.isLowPowerMode { return .yellow }
+        return battery.level <= 20 ? .red : .white
     }
 }

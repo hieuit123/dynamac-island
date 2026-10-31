@@ -13,6 +13,7 @@ struct BlackHoleEffect: View, Animatable {
     let layer: Layer
     /// Album colors; when set, the effect is tinted to match the playing artwork.
     var palette: [Color]? = nil
+    var pill = false
 
     var animatableData: Double {
         get { intensity }
@@ -21,7 +22,7 @@ struct BlackHoleEffect: View, Animatable {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private var outline: NotchShape { NotchShape(topRadius: topRadius, bottomRadius: bottomRadius, closed: false) }
+    private var outline: NotchShape { NotchShape(topRadius: topRadius, bottomRadius: bottomRadius, closed: false, pill: pill) }
 
     var body: some View {
         let interval = ProcessInfo.processInfo.isLowPowerModeEnabled ? 1.0 / 30 : 1.0 / 60
@@ -76,7 +77,7 @@ struct BlackHoleEffect: View, Animatable {
                 outline.stroke((palette?[1] ?? .white).opacity(0.22), lineWidth: 3).blur(radius: 7)
                 outline.stroke(photonRing(t), lineWidth: 3 * intensity).blur(radius: 3)
             }
-            .scaleEffect(1 + 0.012 * sin(t * 2.2) * intensity, anchor: .top)
+            .scaleEffect(1 + 0.012 * sin(t * 2.2) * intensity, anchor: pill ? .center : .top)
         case .border:
             ZStack {
                 outline.stroke(Color.white.opacity(0.16), lineWidth: 1)
@@ -105,7 +106,7 @@ struct BlackHoleEffect: View, Animatable {
                                 style: StrokeStyle(lineWidth: (3 + 2 * kd) * intensity, lineCap: .round,
                                                    dash: [10 + 8 * kd, 14 + 6 * kd], dashPhase: t * 40 * (kd + 1) * dir))
                         .blur(radius: kd * 3 + 1)
-                        .scaleEffect(1 + kd * 0.035 * intensity, anchor: .top)
+                        .scaleEffect(1 + kd * 0.035 * intensity, anchor: pill ? .center : .top)
                         .opacity(0.9 - kd * 0.22)
                 }
             }

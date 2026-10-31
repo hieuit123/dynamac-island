@@ -203,25 +203,55 @@ final class WaveformView: NSView {
 struct NowPlayingCard: View {
     @ObservedObject var nowPlaying: NowPlayingService
     @ObservedObject var vm: IslandViewModel
-    let gradientProgress: Bool
+    @ObservedObject var settings: AppSettings
 
     var body: some View {
         let palette = nowPlaying.palette
         HStack(spacing: 14) {
             AlbumArtwork(image: nowPlaying.artwork, palette: palette, isPlaying: nowPlaying.isPlaying, size: 104,
                          trackID: nowPlaying.track.map { $0.title + $0.artist } ?? "")
+                .overlay(alignment: .bottomTrailing) {
+                    // Which app is playing (useful now that every media source is supported).
+                    if let icon = nowPlaying.appIcon, nowPlaying.track != nil {
+                        Image(nsImage: icon).resizable().frame(width: 26, height: 26)
+                            .shadow(color: .black.opacity(0.5), radius: 3)
+                            .offset(x: 7, y: 7)
+                    }
+                }
                 .offset(x: vm.swipeOffset)
                 .opacity(1 - Double(min(abs(vm.swipeOffset) / 120, 0.5)))
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .top, spacing: 6) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(nowPlaying.track?.title ?? "Nothing playing")
-                            .font(.system(size: 14, weight: .bold)).lineLimit(1)
-                        Text(subtitle)
-                            .font(.system(size: 11.5, weight: .medium)).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
+                        MarqueeText(text: nowPlaying.track?.title ?? "Nothing playing",
+                                    font: .system(size: 14, weight: .bold), enabled: settings.marqueeTitles)
+                        MarqueeText(text: subtitle, font: .system(size: 11.5, weight: .medium), enabled: settings.marqueeTitles)
+                            .foregroundStyle(.white.opacity(0.6))
+                        if settings.showAudioBadges, let badge = nowPlaying.audioBadge {
+                            Text(badge.uppercased())
+                                .font(.system(size: 8.5, weight: .heavy))
+                                .padding(.horizontal, 5).padding(.vertical, 2)
+                                .background(RoundedRectangle(cornerRadius: 4).strokeBorder(Color.white.opacity(0.5), lineWidth: 0.8))
+                                .foregroundStyle(.white.opacity(0.8))
+                                .padding(.top, 2)
+                        }
                     }
                     Spacer(minLength: 0)
+                    if nowPlaying.supportsSpeed {
+                        Button { nowPlaying.cycleSpeed() } label: {
+                            Text("\(Int(nowPlaying.playbackRate))×")
+                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                .padding(.horizontal, 6).frame(height: 20)
+                                .background(Capsule().fill(Color.white.opacity(0.12)))
+                        }
+                        .buttonStyle(PressableStyle())
+                        .help("Playback speed")
+                    }
+                    if nowPlaying.track != nil {
+                        iconButton("link", size: 12, tint: .white.opacity(0.6)) { nowPlaying.copyLink() }
+                            .help("Copy song link")
+                    }
                     if nowPlaying.canFavorite {
                         iconButton(nowPlaying.isFavorite ? "star.fill" : "star", size: 13,
                                    tint: nowPlaying.isFavorite ? palette[0] : .white.opacity(0.6)) { nowPlaying.toggleFavorite() }
@@ -229,7 +259,7 @@ struct NowPlayingCard: View {
                     }
                 }
 
-                ProgressScrubber(nowPlaying: nowPlaying, palette: palette, gradient: gradientProgress)
+                ProgressScrubber(nowPlaying: nowPlaying, palette: palette, gradient: settings.gradientProgress)
                     .disabled(nowPlaying.track == nil)
 
                 HStack(spacing: 0) {
@@ -268,7 +298,7 @@ struct NowPlayingCard: View {
     }
 
     private var subtitle: String {
-        guard let track = nowPlaying.track else { return "Play something in Music or Spotify" }
+        guard let track = nowPlaying.track else { return "Play something in any app" }
         return [track.artist, track.album].filter { !$0.isEmpty }.joined(separator: " — ")
     }
 
@@ -308,5 +338,56 @@ struct PressableStyle: ButtonStyle {
             .contentShape(Rectangle())
             .scaleEffect(configuration.isPressed ? 0.82 : 1)
             .animation(.spring(response: 0.2, dampingFraction: 0.6), value: configuration.isPressed)
+    }
+}
+
+/// Single-line text that scrolls when it doesn't fit (like iOS). Animates only while visible and overflowing.
+struct MarqueeText: View {
+    let text: String
+    let font: Font
+    var enabled = true
+
+    @State private var textWidth: CGFloat = 0
+    @State private var containerWidth: CGFloat = 0
+    @State private var offset: CGFloat = 0
+
+    private let gap: CGFloat = 36
+    private var overflows: Bool { enabled && textWidth > containerWidth + 1 && containerWidth > 0 }
+
+    var body: some View {
+        Text(text).font(font).lineLimit(1).hidden()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(GeometryReader { geo in Color.clear.onAppear { containerWidth = geo.size.width }
+                .onChange(of: geo.size.width) { containerWidth = geo.size.width } })
+            .overlay(alignment: .leading) {
+                HStack(spacing: gap) {
+                    label.background(GeometryReader { geo in Color.clear.onAppear { textWidth = geo.size.width }
+                        .onChange(of: geo.size.width) { textWidth = geo.size.width } })
+                    if overflows { label }
+                }
+                .offset(x: offset)
+                .fixedSize()
+            }
+            .clipped()
+            .mask(LinearGradient(stops: overflows ? [.init(color: .clear, location: 0), .init(color: .black, location: 0.04),
+                                                    .init(color: .black, location: 0.92), .init(color: .clear, location: 1)]
+                                                 : [.init(color: .black, location: 0), .init(color: .black, location: 1)],
+                                 startPoint: .leading, endPoint: .trailing))
+            .onChange(of: text) { restart() }
+            .onChange(of: overflows) { restart() }
+            .onAppear(perform: restart)
+    }
+
+    private var label: some View { Text(text).font(font).lineLimit(1).fixedSize() }
+
+    private func restart() {
+        var reset = Transaction()
+        reset.disablesAnimations = true
+        withTransaction(reset) { offset = 0 }
+        guard overflows else { return }
+        let distance = textWidth + gap
+        withAnimation(.linear(duration: Double(distance) / 30).delay(1.5).repeatForever(autoreverses: false)) {
+            offset = -distance
+        }
     }
 }

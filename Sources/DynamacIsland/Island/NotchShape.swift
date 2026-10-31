@@ -6,6 +6,8 @@ struct NotchShape: Shape {
     var topRadius: CGFloat
     var bottomRadius: CGFloat
     var closed = true
+    /// Floating pill for displays without a notch: fully rounded, not attached to the top edge.
+    var pill = false
 
     var animatableData: AnimatablePair<CGFloat, CGFloat> {
         get { AnimatablePair(topRadius, bottomRadius) }
@@ -13,6 +15,9 @@ struct NotchShape: Shape {
     }
 
     func path(in rect: CGRect) -> Path {
+        if pill {
+            return RoundedRectangle(cornerRadius: min(bottomRadius, rect.height / 2), style: .continuous).path(in: rect)
+        }
         let w = rect.width, h = rect.height
         let tr = min(topRadius, w / 4, h / 2)
         let br = min(bottomRadius, (w - 2 * tr) / 2, h - tr)

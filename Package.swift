@@ -16,6 +16,8 @@ let package = Package(
                 .linkedFramework("CoreAudio"),
                 .linkedFramework("AudioToolbox"),
                 .linkedFramework("ServiceManagement"),
+                .linkedFramework("IOBluetooth"),
+                .linkedFramework("CoreBluetooth"),
             ]
         ),
         .testTarget(name: "IslandCoreTests", dependencies: ["IslandCore"]),

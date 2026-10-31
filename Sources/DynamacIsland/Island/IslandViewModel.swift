@@ -3,26 +3,13 @@ import Combine
 import IslandCore
 
 enum IslandState { case collapsed, peek, expanded }
-enum ExpandedTab { case home, shelf, calendar, timer }
+enum ExpandedTab: CaseIterable { case home, shelf, calendar, timer, battery }
 
-enum HUDKind: Equatable {
-    case volume(level: Float, muted: Bool)
-    case brightness(level: Float)
-}
-
-enum TransientActivity: Equatable {
-    case charging(level: Int)
-    case timerDone
-}
-
+/// Per-island UI state (one island per display). Shared state lives in `ActivityCenter`.
 @MainActor
 final class IslandViewModel: ObservableObject {
     @Published var state: IslandState = .collapsed { didSet { updateExitWatchdog(); updateEffectMount() } }
     @Published var tab: ExpandedTab = .home
-    @Published var hud: HUDKind?
-    @Published var transient: TransientActivity?
-    @Published private(set) var timer = CountdownTimer()
-    @Published private(set) var isSuspended = false { didSet { updateEffectMount() } }
     /// Keeps the effect alive while it fades out, then removes it so an idle island costs no GPU time.
     @Published private(set) var isEffectMounted = false
     /// Horizontal artwork offset driven by the swipe-to-skip gesture.
@@ -44,21 +31,33 @@ final class IslandViewModel: ObservableObject {
 
     @Published var notchSize = CGSize(width: 190, height: 32)
     @Published var hasNotch = false
+    /// Floating pill (instead of a simulated notch) on displays without a notch.
+    @Published var pillMode = false
 
     var mouseInsideProbe: () -> Bool = { false }
     var onExpand: () -> Void = {}
 
+    let activities: AppActivities
     private let settings: AppSettings
     private var collapseWork: DispatchWorkItem?
-    private var hudWork: DispatchWorkItem?
-    private var transientWork: DispatchWorkItem?
-    private var timerFire: Timer?
+    private var hoverWork: DispatchWorkItem?
+    /// Set after a deliberate collapse (swipe up) so the shrinking tracking area can't immediately re-expand it.
+    private var ignoreHoverUntilExit = false
     private var exitWatchdog: Timer?
     private var effectUnmountWork: DispatchWorkItem?
+    private var cancellables = Set<AnyCancellable>()
 
-    init(settings: AppSettings) {
+    init(settings: AppSettings, activities: AppActivities) {
         self.settings = settings
+        self.activities = activities
+        activities.center.$isSuspended.removeDuplicates().sink { [weak self] suspended in
+            guard let self else { return }
+            if suspended { self.collapse() }
+            DispatchQueue.main.async { self.updateEffectMount() }
+        }.store(in: &cancellables)
     }
+
+    private var isSuspended: Bool { activities.center.isSuspended }
 
     /// Tracking areas can miss a mouse-exit on fast pointer jumps; poll slowly only while the island is open.
     private func updateExitWatchdog() {
@@ -109,14 +108,29 @@ final class IslandViewModel: ObservableObject {
     // MARK: Interaction
 
     func hoverChanged(_ inside: Bool) {
+        hoverWork?.cancel()
         if inside {
+            if ignoreHoverUntilExit { return }
             cancelPendingCollapse()
             guard state == .collapsed, !isSuspended else { return }
-            if settings.hapticsEnabled { NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now) }
-            if settings.expandOnHover { expand() } else { state = .peek }
+            let delay = settings.hoverDelay
+            guard delay > 0 else { return activateFromHover() }
+            let work = DispatchWorkItem { [weak self] in
+                guard let self, self.mouseInsideProbe() else { return }
+                self.activateFromHover()
+            }
+            hoverWork = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
         } else {
+            ignoreHoverUntilExit = false
             scheduleCollapse(after: state == .expanded ? 0.4 : 0.15)
         }
+    }
+
+    private func activateFromHover() {
+        guard state == .collapsed else { return }
+        if settings.hapticsEnabled { NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now) }
+        if settings.expandOnHover { expand() } else { state = .peek }
     }
 
     func expand() {
@@ -126,10 +140,34 @@ final class IslandViewModel: ObservableObject {
         onExpand()
     }
 
+    /// Collapse requested by the user while the pointer is still over the island.
+    func dismiss() {
+        ignoreHoverUntilExit = true
+        collapse()
+    }
+
     func collapse() {
         cancelPendingCollapse()
         state = .collapsed
         tab = .home
+    }
+
+    /// Swipe-down / middle-click: expand, or move to the next panel when already expanded.
+    func cycleTab() {
+        guard state == .expanded else { return expand() }
+        let tabs = availableTabs
+        let index = tabs.firstIndex(of: tab) ?? 0
+        tab = tabs[(index + 1) % tabs.count]
+    }
+
+    var availableTabs: [ExpandedTab] {
+        ExpandedTab.allCases.filter { tab in
+            switch tab {
+            case .calendar: return settings.showCalendar
+            case .battery: return settings.showBattery && activities.battery.hasBattery
+            default: return true
+            }
+        }
     }
 
     func scheduleCollapse(after delay: TimeInterval) {
@@ -153,67 +191,5 @@ final class IslandViewModel: ObservableObject {
         tab = .shelf
         state = .expanded
         scheduleCollapse(after: 1.5)
-    }
-
-    func setSuspended(_ suspended: Bool) {
-        isSuspended = suspended
-        if suspended { collapse(); hud = nil }
-    }
-
-    // MARK: Live activities
-
-    func showHUD(_ kind: HUDKind) {
-        hud = kind
-        hudWork?.cancel()
-        let work = DispatchWorkItem { [weak self] in self?.hud = nil }
-        hudWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6, execute: work)
-    }
-
-    func showTransient(_ activity: TransientActivity, duration: TimeInterval = 3) {
-        transient = activity
-        transientWork?.cancel()
-        let work = DispatchWorkItem { [weak self] in self?.transient = nil }
-        transientWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: work)
-    }
-
-    // MARK: Timer (a single one-shot Timer at the end date; no per-second ticking)
-
-    func startTimer(minutes: Double) {
-        timer.start(duration: minutes * 60)
-        scheduleTimerFire()
-    }
-
-    func pauseTimer() {
-        timer.pause()
-        timerFire?.invalidate()
-    }
-
-    func resumeTimer() {
-        timer.resume()
-        scheduleTimerFire()
-    }
-
-    func stopTimer() {
-        timer.stop()
-        timerFire?.invalidate()
-    }
-
-    private func scheduleTimerFire() {
-        timerFire?.invalidate()
-        guard let end = timer.endDate else { return }
-        let t = Timer(fire: end, interval: 0, repeats: false) { [weak self] _ in
-            MainActor.assumeIsolated { self?.timerFinished() }
-        }
-        t.tolerance = 0.2
-        RunLoop.main.add(t, forMode: .common)
-        timerFire = t
-    }
-
-    private func timerFinished() {
-        timer.stop()
-        NSSound(named: "Glass")?.play()
-        showTransient(.timerDone, duration: 5)
     }
 }
