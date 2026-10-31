@@ -17,16 +17,19 @@ enum TransientActivity: Equatable {
 
 @MainActor
 final class IslandViewModel: ObservableObject {
-    @Published var state: IslandState = .collapsed { didSet { updateExitWatchdog() } }
+    @Published var state: IslandState = .collapsed { didSet { updateExitWatchdog(); updateEffectMount() } }
     @Published var tab: ExpandedTab = .home
     @Published var hud: HUDKind?
     @Published var transient: TransientActivity?
     @Published private(set) var timer = CountdownTimer()
-    @Published private(set) var isSuspended = false
+    @Published private(set) var isSuspended = false { didSet { updateEffectMount() } }
+    /// Keeps the effect alive while it fades out, then removes it so an idle island costs no GPU time.
+    @Published private(set) var isEffectMounted = false
     @Published var isDraggingOut = false { didSet { if !isDraggingOut { scheduleCollapse(after: 0.8) } } }
     @Published var isDropTargeted = false {
         didSet {
             guard isDropTargeted != oldValue else { return }
+            updateEffectMount()
             if isDropTargeted {
                 cancelPendingCollapse()
                 tab = .shelf
@@ -50,6 +53,7 @@ final class IslandViewModel: ObservableObject {
     private var transientWork: DispatchWorkItem?
     private var timerFire: Timer?
     private var exitWatchdog: Timer?
+    private var effectUnmountWork: DispatchWorkItem?
 
     init(settings: AppSettings) {
         self.settings = settings
@@ -75,15 +79,30 @@ final class IslandViewModel: ObservableObject {
         exitWatchdog = timer
     }
 
-    /// Effects render only while the island is active, so a collapsed island costs no GPU time.
-    var effectIntensity: Double? {
-        if isSuspended { return nil }
+    /// Target effect strength; 0 means fading out (or hidden once unmounted).
+    var effectIntensity: Double {
+        if isSuspended { return 0 }
         if isDropTargeted { return 1.6 }
         switch state {
-        case .collapsed: return nil
+        case .collapsed: return 0
         case .peek: return 0.7
         case .expanded: return 1.0
         }
+    }
+
+    private func updateEffectMount() {
+        effectUnmountWork?.cancel()
+        if effectIntensity > 0 {
+            if !isEffectMounted { isEffectMounted = true }
+            return
+        }
+        guard isEffectMounted else { return }
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.effectIntensity == 0 else { return }
+            self.isEffectMounted = false
+        }
+        effectUnmountWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + IslandAnimation.collapseDuration + 0.1, execute: work)
     }
 
     // MARK: Interaction

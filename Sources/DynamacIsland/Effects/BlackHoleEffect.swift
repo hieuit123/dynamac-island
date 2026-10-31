@@ -2,14 +2,20 @@ import SwiftUI
 
 /// Animated "black hole" border. Only instantiated while the island is hovered / expanded / drop-targeted,
 /// so the TimelineView (and GPU work) stops completely when the island is idle.
-struct BlackHoleEffect: View {
+struct BlackHoleEffect: View, Animatable {
     enum Layer { case glow, border }
 
     let style: EffectStyle
-    let intensity: Double
+    /// Animatable so the ring smoothly grows/fades with the island instead of popping.
+    var intensity: Double
     let topRadius: CGFloat
     let bottomRadius: CGFloat
     let layer: Layer
+
+    var animatableData: Double {
+        get { intensity }
+        set { intensity = newValue }
+    }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -25,6 +31,7 @@ struct BlackHoleEffect: View {
             case .vortex: vortex(t)
             }
         }
+        .opacity(min(1, max(0, intensity) / 0.5))
         .allowsHitTesting(false)
     }
 

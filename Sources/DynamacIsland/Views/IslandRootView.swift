@@ -59,8 +59,8 @@ struct IslandRootView: View {
         .frame(width: size.width, height: size.height)
         .background {
             ZStack {
-                if let intensity = vm.effectIntensity {
-                    BlackHoleEffect(style: settings.effectStyle, intensity: intensity,
+                if vm.isEffectMounted {
+                    BlackHoleEffect(style: settings.effectStyle, intensity: vm.effectIntensity,
                                     topRadius: r.top, bottomRadius: r.bottom, layer: .glow)
                         .transition(.opacity)
                 }
@@ -68,8 +68,8 @@ struct IslandRootView: View {
             }
         }
         .overlay {
-            if let intensity = vm.effectIntensity {
-                BlackHoleEffect(style: settings.effectStyle, intensity: intensity,
+            if vm.isEffectMounted {
+                BlackHoleEffect(style: settings.effectStyle, intensity: vm.effectIntensity,
                                 topRadius: r.top, bottomRadius: r.bottom, layer: .border)
                     .transition(.opacity)
             }
@@ -92,9 +92,10 @@ struct IslandRootView: View {
             vm.didDropFiles()
             return true
         }
-        .animation(.spring(response: 0.42, dampingFraction: 0.78), value: vm.state)
-        .animation(.spring(response: 0.38, dampingFraction: 0.8), value: activity)
+        .animation(vm.state == .collapsed ? IslandAnimation.collapse : IslandAnimation.expand, value: vm.state)
+        .animation(IslandAnimation.collapse, value: activity)
         .animation(.easeInOut(duration: 0.25), value: vm.isDropTargeted)
+        .animation(IslandAnimation.collapse, value: vm.isEffectMounted)
         .preferredColorScheme(.dark)
         .foregroundStyle(.white)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

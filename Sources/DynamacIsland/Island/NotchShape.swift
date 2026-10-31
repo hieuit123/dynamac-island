@@ -29,3 +29,10 @@ struct NotchShape: Shape {
         return p
     }
 }
+
+enum IslandAnimation {
+    static let collapseDuration = 0.34
+    static let expand = Animation.spring(response: 0.42, dampingFraction: 0.8)
+    /// No bounce: a spring undershoot would briefly make the island shorter than the hardware notch.
+    static let collapse = Animation.smooth(duration: collapseDuration)
+}
