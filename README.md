@@ -10,7 +10,7 @@ A native macOS Dynamic Island inspired by [Alcove](https://tryalcove.com), with 
   - The player takes its colors from the album art: a blurred artwork background, tinted controls, and a gradient progress bar you can drag to seek.
   - Shuffle, repeat (repeat-one in Apple Music) and favorite (Apple Music).
   - The artwork gets a glare sweep on hover and track change, and dims and shrinks when paused.
-  - The collapsed island shows an animated waveform in the album's colors (about 15 fps, only while playing; frozen in Low Power Mode).
+  - The collapsed island shows an animated waveform in the album's colors. Core Animation runs it outside the app (about 0% app CPU); it stops when paused or in Low Power Mode.
   - Swipe left/right with two fingers on the island to skip tracks.
   - The black-hole effect can take on the album colors while music plays.
 - **Calendar**: next event in the next 24 h (EventKit).

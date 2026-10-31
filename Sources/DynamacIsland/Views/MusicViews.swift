@@ -110,32 +110,92 @@ struct ProgressScrubber: View {
     }
 }
 
-/// Small equalizer for the collapsed island. ~15 fps while playing, frozen when paused or in Low Power Mode.
-struct MusicWaveform: View {
+/// Small equalizer for the collapsed island. Animated with Core Animation keyframes, which run in the
+/// render server (capped at ~24 fps), so the app process stays near 0% CPU while music plays.
+struct MusicWaveform: NSViewRepresentable {
     let palette: [Color]
     let animate: Bool
 
-    var body: some View {
-        let paused = !animate || ProcessInfo.processInfo.isLowPowerModeEnabled
-        TimelineView(.animation(minimumInterval: 1.0 / 15, paused: paused)) { context in
-            let t = context.date.timeIntervalSinceReferenceDate
-            Canvas { ctx, size in
-                let bars = 5
-                let gap: CGFloat = 2
-                let width = (size.width - gap * CGFloat(bars - 1)) / CGFloat(bars)
-                for i in 0..<bars {
-                    let d = Double(i)
-                    let level = paused ? [0.35, 0.6, 0.85, 0.55, 0.3][i]
-                        : 0.25 + 0.75 * abs(sin(t * (3.1 + d * 0.9) + d * 1.7) * 0.6 + sin(t * (5.3 - d * 0.7) + d) * 0.4)
-                    let h = max(size.height * level, width)
-                    let rect = CGRect(x: CGFloat(i) * (width + gap), y: (size.height - h) / 2, width: width, height: h)
-                    ctx.fill(Path(roundedRect: rect, cornerRadius: width / 2),
-                             with: .linearGradient(Gradient(colors: palette), startPoint: CGPoint(x: 0, y: size.height),
-                                                   endPoint: CGPoint(x: size.width, y: 0)))
-                }
+    func makeNSView(context: Context) -> WaveformView { WaveformView() }
+
+    func updateNSView(_ view: WaveformView, context: Context) {
+        view.update(colors: palette.map { NSColor($0) },
+                    animate: animate && !ProcessInfo.processInfo.isLowPowerModeEnabled)
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: WaveformView, context: Context) -> CGSize? {
+        CGSize(width: 22, height: 14)
+    }
+}
+
+final class WaveformView: NSView {
+    private let barCount = 5
+    private let restLevels: [CGFloat] = [0.35, 0.6, 0.85, 0.55, 0.3]
+    private var bars: [CALayer] = []
+    private var isAnimating = false
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        for i in 0..<barCount {
+            let bar = CALayer()
+            bar.transform = CATransform3DMakeScale(1, restLevels[i], 1)
+            layer?.addSublayer(bar)
+            bars.append(bar)
+        }
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func layout() {
+        super.layout()
+        let gap: CGFloat = 2
+        let width = (bounds.width - gap * CGFloat(barCount - 1)) / CGFloat(barCount)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for (i, bar) in bars.enumerated() {
+            bar.bounds = CGRect(x: 0, y: 0, width: width, height: bounds.height)
+            bar.position = CGPoint(x: CGFloat(i) * (width + gap) + width / 2, y: bounds.midY)
+            bar.cornerRadius = width / 2
+        }
+        CATransaction.commit()
+    }
+
+    func update(colors: [NSColor], animate: Bool) {
+        let srgb = colors.compactMap { $0.usingColorSpace(.sRGB) }
+        CATransaction.begin()
+        CATransaction.setAnimationDuration(0.6)
+        for (i, bar) in bars.enumerated() {
+            bar.backgroundColor = Self.color(at: CGFloat(i) / CGFloat(barCount - 1), in: srgb).cgColor
+        }
+        CATransaction.commit()
+
+        guard animate != isAnimating else { return }
+        isAnimating = animate
+        for (i, bar) in bars.enumerated() {
+            if animate {
+                let anim = CAKeyframeAnimation(keyPath: "transform.scale.y")
+                var values = (0..<8).map { _ in CGFloat.random(in: 0.22...1) }
+                values.append(values[0])
+                anim.values = values
+                anim.duration = 0.85 + Double(i) * 0.17
+                anim.calculationMode = .cubic
+                anim.repeatCount = .infinity
+                anim.isRemovedOnCompletion = false
+                anim.preferredFrameRateRange = CAFrameRateRange(minimum: 12, maximum: 24, preferred: 24)
+                bar.add(anim, forKey: "wave")
+            } else {
+                bar.removeAnimation(forKey: "wave")
+                bar.transform = CATransform3DMakeScale(1, restLevels[i], 1)
             }
         }
-        .frame(width: 22, height: 14)
+    }
+
+    private static func color(at t: CGFloat, in colors: [NSColor]) -> NSColor {
+        guard colors.count > 1 else { return colors.first ?? .white }
+        let scaled = t * CGFloat(colors.count - 1)
+        let index = min(Int(scaled), colors.count - 2)
+        return colors[index].blended(withFraction: scaled - CGFloat(index), of: colors[index + 1]) ?? colors[index]
     }
 }
 
