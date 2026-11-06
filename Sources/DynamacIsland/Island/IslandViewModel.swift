@@ -3,7 +3,7 @@ import Combine
 import IslandCore
 
 enum IslandState { case collapsed, peek, expanded }
-enum ExpandedTab: CaseIterable { case home, shelf, calendar, timer, battery }
+enum ExpandedTab: CaseIterable { case home, shelf, calendar, timer, battery, pet }
 
 /// Per-island UI state (one island per display). Shared state lives in `ActivityCenter`.
 @MainActor
@@ -81,7 +81,7 @@ final class IslandViewModel: ObservableObject {
 
     /// Target effect strength; 0 means fading out (or hidden once unmounted).
     var effectIntensity: Double {
-        if isSuspended { return 0 }
+        if isSuspended || settings.effectStyle == .none { return 0 }
         if isDropTargeted { return 1.6 }
         switch state {
         case .collapsed: return 0
@@ -164,6 +164,8 @@ final class IslandViewModel: ObservableObject {
         ExpandedTab.allCases.filter { tab in
             switch tab {
             case .calendar: return settings.showCalendar
+            case .timer: return settings.showTimer
+            case .pet: return settings.showPet
             case .battery: return settings.showBattery && activities.battery.hasBattery
             default: return true
             }

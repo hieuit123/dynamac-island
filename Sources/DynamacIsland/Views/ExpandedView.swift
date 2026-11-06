@@ -9,6 +9,7 @@ struct ExpandedView: View {
     @ObservedObject var battery: BatteryService
     @ObservedObject var calendar: CalendarService
     @ObservedObject var shelf: ShelfStore
+    @ObservedObject var pet: PetStore
 
     var body: some View {
         VStack(spacing: 0) {
@@ -20,6 +21,7 @@ struct ExpandedView: View {
                 case .calendar: CalendarPanel(calendar: calendar)
                 case .timer: TimerPanel(center: center)
                 case .battery: BatteryPanel(battery: battery)
+                case .pet: PetPanel(store: pet)
                 }
             }
             .transition(.opacity.combined(with: .scale(scale: 0.97)))
@@ -43,12 +45,17 @@ struct ExpandedView: View {
             if vm.hasNotch { Color.clear.frame(width: vm.notchSize.width) }
 
             HStack(spacing: 4) {
+                if settings.showPet {
+                    HeaderIcon(symbol: "pawprint.fill", selected: vm.tab == .pet) { toggle(.pet) }
+                }
                 if settings.showCalendar {
                     HeaderIcon(symbol: "calendar", selected: vm.tab == .calendar,
                                badge: calendar.nextEvent.map { Color(nsColor: $0.color) }) { toggle(.calendar) }
                 }
-                HeaderIcon(symbol: "timer", selected: vm.tab == .timer,
-                           badge: center.timer.isActive ? .orange : nil) { toggle(.timer) }
+                if settings.showTimer {
+                    HeaderIcon(symbol: "timer", selected: vm.tab == .timer,
+                               badge: center.timer.isActive ? .orange : nil) { toggle(.timer) }
+                }
                 if settings.showBattery, battery.hasBattery {
                     Button { toggle(.battery) } label: {
                         HStack(spacing: 3) {
@@ -72,7 +79,7 @@ struct ExpandedView: View {
 
     private func toggle(_ tab: ExpandedTab) {
         vm.tab = vm.tab == tab ? .home : tab
-        if tab == .calendar { calendar.refresh() }
+        if tab == .calendar { calendar.syncNow() }
     }
 }
 

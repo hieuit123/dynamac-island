@@ -105,3 +105,56 @@ import Testing
         #expect(colors[0].hsb.v >= 0.85)
     }
 }
+
+@Suite struct PetTests {
+    let t0 = Date(timeIntervalSince1970: 1_000_000)
+
+    @Test func statsDecayOverTime() {
+        var pet = Pet(now: t0)
+        pet.advance(to: t0.addingTimeInterval(4 * 3600))
+        #expect(pet.fullness < 0.8 && pet.happiness < 0.8 && pet.energy < 1)
+    }
+
+    @Test func longAbsenceIsCapped() {
+        var long = Pet(now: t0), capped = Pet(now: t0)
+        long.advance(to: t0.addingTimeInterval(30 * 24 * 3600))
+        capped.advance(to: t0.addingTimeInterval(12 * 3600))
+        #expect(long.fullness == capped.fullness && long.energy == capped.energy)
+    }
+
+    @Test func refusesFeedingWhenFullOrAsleep() {
+        var pet = Pet(now: t0)
+        pet.fullness = 0.95
+        let fedWhenFull = pet.feed(now: t0)
+        #expect(!fedWhenFull)
+        pet.fullness = 0.3
+        pet.toggleSleep(now: t0)
+        let fedAsleep = pet.feed(now: t0)
+        #expect(!fedAsleep)
+    }
+
+    @Test func playingCostsEnergyAndRaisesHappiness() {
+        var pet = Pet(now: t0)
+        pet.happiness = 0.4
+        let played = pet.play(now: t0)
+        #expect(played)
+        #expect(pet.happiness > 0.4 && pet.energy < 1 && pet.xp == 2)
+    }
+
+    @Test func sleepingRestoresEnergyThenWakes() {
+        var pet = Pet(now: t0)
+        pet.energy = 0.2
+        pet.toggleSleep(now: t0)
+        pet.advance(to: t0.addingTimeInterval(5 * 3600))
+        #expect(pet.energy == 1 && !pet.isSleeping)
+    }
+
+    @Test func storePersists() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("pet.json")
+        let store = PetStore(fileURL: url, now: t0)
+        store.setSpecies(.fox)
+        store.rename("Kit")
+        #expect(PetStore(fileURL: url).pet.species == .fox)
+        #expect(PetStore(fileURL: url).pet.name == "Kit")
+    }
+}

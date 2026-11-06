@@ -60,6 +60,7 @@ final class NowPlayingService: ObservableObject {
     private var observers: [NSObjectProtocol] = []
     private var bridge: MediaRemoteBridge?
     private var mrState: [String: Any] = [:]
+    private var repeatTimer: Timer?
     private let isoFormatter: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -131,7 +132,26 @@ final class NowPlayingService: ObservableObject {
             runScript("tell application \"Spotify\" to set repeating to \(repeatMode != .off)") { _ in }
         case nil:
             bridge?.run(["repeat", repeatMode == .off ? "1" : repeatMode == .one ? "2" : "3"])
+            scheduleSoftRepeat()
         }
+    }
+
+    /// Browsers and most MediaRemote sources ignore repeat-one, so loop by seeking to 0 just before the end.
+    private func scheduleSoftRepeat() {
+        repeatTimer?.invalidate()
+        repeatTimer = nil
+        guard repeatMode == .one, usingMediaRemote, track != nil, track?.scriptSource == nil,
+              isPlaying, duration > 1 else { return }
+        let remaining = (duration - elapsed()) / max(playbackRate, 0.1) - 0.6
+        let timer = Timer(timeInterval: max(remaining, 0.05), repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.seek(to: 0)
+                self.scheduleSoftRepeat()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        repeatTimer = timer
     }
 
     func cycleSpeed() {
@@ -229,6 +249,7 @@ final class NowPlayingService: ObservableObject {
             track = nil
             isPlaying = false
             artwork = nil
+            scheduleSoftRepeat()
             return
         }
         let appID = mrState["parentApplicationBundleIdentifier"] as? String ?? bundleID
@@ -250,7 +271,11 @@ final class NowPlayingService: ObservableObject {
             positionDate = (mrState["timestamp"] as? String).flatMap(parseDate) ?? Date()
         }
         if let mode = mrState["shuffleMode"] as? Int { shuffle = mode > 1 }
-        if let mode = mrState["repeatMode"] as? Int { repeatMode = mode == 2 ? .one : mode == 3 ? .all : .off }
+        // Non-script sources keep the local mode: the player reports "off" because it ignores repeat commands.
+        if newTrack.scriptSource != nil, let mode = mrState["repeatMode"] as? Int {
+            repeatMode = mode == 2 ? .one : mode == 3 ? .all : .off
+        }
+        scheduleSoftRepeat()
         if mrState["supportsIsLiked"] as? Bool == true { isFavorite = mrState["isLiked"] as? Bool ?? false }
         if let base64 = payload["artworkData"] as? String, let data = Data(base64Encoded: base64), let image = NSImage(data: data) {
             setArtwork(image, for: newTrack)

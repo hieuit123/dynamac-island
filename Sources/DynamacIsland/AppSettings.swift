@@ -3,13 +3,15 @@ import Combine
 import ServiceManagement
 
 enum EffectStyle: String, CaseIterable, Identifiable {
-    case accretion, eventHorizon, vortex
+    case none, accretion, eventHorizon, vortex, dragon
     var id: String { rawValue }
     var title: String {
         switch self {
+        case .none: return "None"
         case .accretion: return "Accretion Disk"
         case .eventHorizon: return "Event Horizon"
         case .vortex: return "Vortex"
+        case .dragon: return "Golden Dragon"
         }
     }
 }
@@ -49,6 +51,8 @@ final class AppSettings: ObservableObject {
     @Published var hapticsEnabled: Bool { didSet { defaults.set(hapticsEnabled, forKey: "hapticsEnabled") } }
     @Published var showMusic: Bool { didSet { defaults.set(showMusic, forKey: "showMusic") } }
     @Published var showCalendar: Bool { didSet { defaults.set(showCalendar, forKey: "showCalendar") } }
+    @Published var showTimer: Bool { didSet { defaults.set(showTimer, forKey: "showTimer") } }
+    @Published var showPet: Bool { didSet { defaults.set(showPet, forKey: "showPet") } }
     @Published var showBattery: Bool { didSet { defaults.set(showBattery, forKey: "showBattery") } }
     @Published var animatedWaveform: Bool { didSet { defaults.set(animatedWaveform, forKey: "animatedWaveform") } }
     @Published var albumTintedEffects: Bool { didSet { defaults.set(albumTintedEffects, forKey: "albumTintedEffects") } }
@@ -83,6 +87,8 @@ final class AppSettings: ObservableObject {
     @Published var hoverDelay: Double { didSet { defaults.set(hoverDelay, forKey: "hoverDelay") } }
     @Published var notchWidthOffset: Double { didSet { defaults.set(notchWidthOffset, forKey: "notchWidthOffset") } }
     @Published var notchHeightOffset: Double { didSet { defaults.set(notchHeightOffset, forKey: "notchHeightOffset") } }
+    @Published var expandedWidthOffset: Double { didSet { defaults.set(expandedWidthOffset, forKey: "expandedWidthOffset") } }
+    @Published var expandedHeightOffset: Double { didSet { defaults.set(expandedHeightOffset, forKey: "expandedHeightOffset") } }
     @Published var calendarLeadMinutes: Int { didSet { defaults.set(calendarLeadMinutes, forKey: "calendarLeadMinutes") } }
     @Published var effectStyle: EffectStyle { didSet { defaults.set(effectStyle.rawValue, forKey: "effectStyle") } }
     @Published var hudSpeed: HUDSpeed { didSet { defaults.set(hudSpeed.rawValue, forKey: "hudSpeed") } }
@@ -101,12 +107,14 @@ final class AppSettings: ObservableObject {
     }
 
     private init() {
-        defaults.register(defaults: ["hudEnabled": true, "expandOnHover": false, "hapticsEnabled": true, "showMusic": true, "showCalendar": true, "showBattery": true, "animatedWaveform": true, "albumTintedEffects": true, "gradientProgress": true, "swipeToSkip": true, "hideInFullscreen": true, "hideWhileGaming": true, "hideInMissionControl": false, "hideFromCapture": false, "hudShowPercentage": false, "hudOvershoot": true, "hudGlow": true, "chargingSound": true, "lowBatteryAlerts": true, "lowBatterySound": true, "lowPowerModeAlert": true, "calendarLiveActivity": true, "timeToLeaveAlert": true, "showDeclinedEvents": false, "excludeSubscribedCalendars": true, "verticalSwipeGestures": true, "middleClickCycle": true, "marqueeTitles": true, "showMusicWhenPaused": false, "showAudioBadges": true, "useMediaRemote": true, "bluetoothActivity": true, "focusActivity": true, "simulatedNotch": true, "showOnAllDisplays": false, "onboardingDone": false, "hoverDelay": 0.0, "notchWidthOffset": 0.0, "notchHeightOffset": 0.0, "calendarLeadMinutes": 10, "displayID": 0])
+        defaults.register(defaults: ["hudEnabled": true, "expandOnHover": false, "hapticsEnabled": true, "showMusic": true, "showCalendar": true, "showTimer": true, "showPet": true, "showBattery": true, "animatedWaveform": true, "albumTintedEffects": true, "gradientProgress": true, "swipeToSkip": true, "hideInFullscreen": true, "hideWhileGaming": true, "hideInMissionControl": false, "hideFromCapture": false, "hudShowPercentage": false, "hudOvershoot": true, "hudGlow": true, "chargingSound": true, "lowBatteryAlerts": true, "lowBatterySound": true, "lowPowerModeAlert": true, "calendarLiveActivity": true, "timeToLeaveAlert": true, "showDeclinedEvents": false, "excludeSubscribedCalendars": true, "verticalSwipeGestures": true, "middleClickCycle": true, "marqueeTitles": true, "showMusicWhenPaused": false, "showAudioBadges": true, "useMediaRemote": true, "bluetoothActivity": true, "focusActivity": true, "simulatedNotch": true, "showOnAllDisplays": false, "onboardingDone": false, "hoverDelay": 0.0, "notchWidthOffset": 0.0, "notchHeightOffset": 0.0, "calendarLeadMinutes": 10, "displayID": 0])
         hudEnabled = defaults.bool(forKey: "hudEnabled")
         expandOnHover = defaults.bool(forKey: "expandOnHover")
         hapticsEnabled = defaults.bool(forKey: "hapticsEnabled")
         showMusic = defaults.bool(forKey: "showMusic")
         showCalendar = defaults.bool(forKey: "showCalendar")
+        showTimer = defaults.bool(forKey: "showTimer")
+        showPet = defaults.bool(forKey: "showPet")
         showBattery = defaults.bool(forKey: "showBattery")
         animatedWaveform = defaults.bool(forKey: "animatedWaveform")
         albumTintedEffects = defaults.bool(forKey: "albumTintedEffects")
@@ -141,6 +149,8 @@ final class AppSettings: ObservableObject {
         hoverDelay = defaults.double(forKey: "hoverDelay")
         notchWidthOffset = defaults.double(forKey: "notchWidthOffset")
         notchHeightOffset = defaults.double(forKey: "notchHeightOffset")
+        expandedWidthOffset = defaults.double(forKey: "expandedWidthOffset")
+        expandedHeightOffset = defaults.double(forKey: "expandedHeightOffset")
         calendarLeadMinutes = defaults.integer(forKey: "calendarLeadMinutes")
         effectStyle = EffectStyle(rawValue: defaults.string(forKey: "effectStyle") ?? "") ?? .accretion
         hudSpeed = HUDSpeed(rawValue: defaults.string(forKey: "hudSpeed") ?? "") ?? .smooth

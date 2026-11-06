@@ -29,6 +29,8 @@ enum IslandMetrics {
     /// Fixed transparent window; fully transparent pixels are click-through, so only the island captures input.
     static let windowSize = CGSize(width: 900, height: 340)
     static let expandedSize = CGSize(width: 640, height: 236)
+    /// Largest expanded size that still fits the window minus the hit-slop padding.
+    static let maxExpandedSize = CGSize(width: windowSize.width - 28, height: windowSize.height - 8)
 }
 
 extension NSScreen {

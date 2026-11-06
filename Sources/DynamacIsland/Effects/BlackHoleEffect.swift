@@ -29,9 +29,11 @@ struct BlackHoleEffect: View, Animatable {
         TimelineView(.animation(minimumInterval: interval, paused: reduceMotion)) { context in
             let t = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 3600)
             switch style {
+            case .none: Color.clear
             case .accretion: accretion(t)
             case .eventHorizon: eventHorizon(t)
             case .vortex: vortex(t)
+            case .dragon: dragon(t)
             }
         }
         .opacity(min(1, max(0, intensity) / 0.5))
@@ -115,5 +117,11 @@ struct BlackHoleEffect: View, Animatable {
                                            center: .center, angle: .degrees(-t * 90)),
                            style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
         }
+    }
+
+    // MARK: Golden dragon
+
+    private func dragon(_ t: Double) -> some View {
+        DragonCanvas(outline: outline, layer: layer, t: t, intensity: intensity)
     }
 }
