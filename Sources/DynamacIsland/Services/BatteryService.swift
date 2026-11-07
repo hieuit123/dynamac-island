@@ -59,19 +59,31 @@ final class BatteryService: ObservableObject {
         }
     }
 
+    /// Short state: Charging, Charged, On power adapter or On battery.
     var statusText: String {
         if isPluggedIn {
             if level >= 100 || (!isCharging && level >= 80) { return isCharging ? "Charged" : "On power adapter" }
-            guard let minutes = minutesToFull else { return "Charging — calculating…" }
-            return "Charging — \(Self.format(minutes)) until full"
+            return "Charging"
         }
-        guard let minutes = minutesToEmpty else { return "On battery — calculating…" }
+        return "On battery"
+    }
+
+    /// Time left, or nil when there is nothing to estimate (fully charged / on the adapter).
+    var remainingText: String? {
+        if isPluggedIn {
+            if level >= 100 || (!isCharging && level >= 80) { return nil }
+            guard let minutes = minutesToFull else { return "Calculating…" }
+            return "\(Self.format(minutes)) until full"
+        }
+        guard let minutes = minutesToEmpty else { return "Calculating…" }
         return "\(Self.format(minutes)) remaining"
     }
 
     private static func format(_ minutes: Int) -> String {
         minutes >= 60 ? "\(minutes / 60)h \(minutes % 60)m" : "\(minutes)m"
     }
+
+    func refresh() { update() }
 
     private func update() {
         guard let info = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
@@ -92,7 +104,10 @@ final class BatteryService: ObservableObject {
             isPluggedIn = desc[kIOPSPowerSourceStateKey] as? String == kIOPSACPowerValue
             let toEmpty = desc[kIOPSTimeToEmptyKey] as? Int ?? -1
             let toFull = desc[kIOPSTimeToFullChargeKey] as? Int ?? -1
-            minutesToEmpty = toEmpty > 0 ? toEmpty : nil
+            // The dictionary reports -1 while macOS recomputes; the system estimate (seconds) is often ready sooner.
+            let estimate = IOPSGetTimeRemainingEstimate()
+            let fallback = estimate > 0 ? Int((estimate / 60).rounded()) : -1
+            minutesToEmpty = toEmpty > 0 ? toEmpty : (isPluggedIn || fallback <= 0 ? nil : fallback)
             minutesToFull = toFull > 0 ? toFull : nil
         }
         hasBattery = found
