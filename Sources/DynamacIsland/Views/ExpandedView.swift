@@ -264,6 +264,44 @@ struct TimerPanel: View {
     private var totalSeconds: Int { hours * 3600 + minutes * 60 + seconds }
     private let quickMinutes = [1, 5, 10, 15, 30, 60]
 
+    private enum Unit { case hours, minutes, seconds }
+    @State private var hoveredUnit: Unit?
+    @State private var scrollMonitor: Any?
+    @State private var scrollAccumulator: CGFloat = 0
+
+    private struct ScrollInput: Sendable {
+        var deltaY: CGFloat
+        var inverted: Bool
+        var precise: Bool
+        var isMomentum: Bool
+    }
+
+    /// Scrolling over a unit changes it: up increases, down decreases (clamped, no wrap-around). Returns true when consumed.
+    private func handleScroll(_ input: ScrollInput) -> Bool {
+        guard let unit = hoveredUnit, !center.timer.isActive else { return false }
+        guard !input.isMomentum else { return true }
+        let finger = input.inverted ? input.deltaY : -input.deltaY
+        var steps = 0
+        if input.precise {
+            scrollAccumulator += finger
+            steps = -Int(scrollAccumulator / 10)
+            scrollAccumulator -= CGFloat(-steps) * 10
+        } else if finger != 0 {
+            steps = finger < 0 ? 1 : -1
+        }
+        if steps != 0 { adjust(unit, by: steps) }
+        return true
+    }
+
+    private func adjust(_ unit: Unit, by steps: Int) {
+        switch unit {
+        case .hours: hours = min(max(hours + steps, 0), 24)
+        case .minutes: minutes = min(max(minutes + steps, 0), 59)
+        case .seconds: seconds = min(max(seconds + steps, 0), 59)
+        }
+        normalize()
+    }
+
     /// Quick buttons start right away and also fill the picker, so the same duration is remembered.
     private func startQuick(minutes quick: Int) {
         hours = quick / 60
@@ -303,11 +341,11 @@ struct TimerPanel: View {
                     } else {
                         Text("Set a timer").font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
                         HStack(alignment: .top, spacing: 6) {
-                            unitPicker($hours, max: 24, label: "hr")
+                            unitPicker($hours, max: 24, label: "hr", unit: .hours)
                             colon
-                            unitPicker($minutes, max: 59, label: "min")
+                            unitPicker($minutes, max: 59, label: "min", unit: .minutes)
                             colon
-                            unitPicker($seconds, max: 59, label: "sec")
+                            unitPicker($seconds, max: 59, label: "sec", unit: .seconds)
                             Spacer(minLength: 8)
                             pill("Start", symbol: "play.fill") { center.startTimer(seconds: totalSeconds) }
                                 .opacity(totalSeconds > 0 ? 1 : 0.4)
@@ -336,6 +374,19 @@ struct TimerPanel: View {
                 .animation(.easeInOut(duration: 0.2), value: center.timer.isActive)
             }
             }
+            .onAppear {
+                scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
+                    let input = ScrollInput(deltaY: event.scrollingDeltaY, inverted: event.isDirectionInvertedFromDevice,
+                                            precise: event.hasPreciseScrollingDeltas, isMomentum: event.momentumPhase != [])
+                    let consumed = MainActor.assumeIsolated { handleScroll(input) }
+                    return consumed ? nil : event
+                }
+            }
+            .onDisappear {
+                if let scrollMonitor { NSEvent.removeMonitor(scrollMonitor) }
+                scrollMonitor = nil
+                hoveredUnit = nil
+            }
         }
     }
 
@@ -348,7 +399,7 @@ struct TimerPanel: View {
         if hours >= 24 { hours = 24; minutes = 0; seconds = 0 }
     }
 
-    private func unitPicker(_ value: Binding<Int>, max limit: Int, label: String) -> some View {
+    private func unitPicker(_ value: Binding<Int>, max limit: Int, label: String, unit: Unit) -> some View {
         VStack(spacing: 2) {
             stepButton("chevron.up") { value.wrappedValue = value.wrappedValue >= limit ? 0 : value.wrappedValue + 1; normalize() }
             TextField("00", text: Binding(
@@ -366,6 +417,9 @@ struct TimerPanel: View {
                 .frame(width: 52)
             stepButton("chevron.down") { value.wrappedValue = value.wrappedValue <= 0 ? limit : value.wrappedValue - 1; normalize() }
             Text(label).font(.system(size: 10)).foregroundStyle(.secondary)
+        }
+        .onHover { inside in
+            if inside { hoveredUnit = unit } else if hoveredUnit == unit { hoveredUnit = nil }
         }
     }
 

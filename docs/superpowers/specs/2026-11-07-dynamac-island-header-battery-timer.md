@@ -4,15 +4,15 @@ Delta on top of [2026-11-07-dynamac-island-pet-styles-calendar.md](2026-11-07-dy
 
 ## Summary
 
-| Area         | Change                                                                           |
-| ------------ | -------------------------------------------------------------------------------- |
-| Header       | Home and Shelf are icon-only; every header icon has an instant hover tooltip     |
-| Battery tab  | Two halves: 3-line battery info and a keyboard backlight slider                  |
-| Battery data | Time estimate refreshed on open and while open; system-estimate fallback         |
-| Timer        | Custom hours / minutes / seconds (max 24:00:00), quick buttons, 3:7 layout       |
-| Calendar     | All events in 24 h, scrollable; vertical scroll is no longer a swipe on that tab |
-| Build        | `AppIcon.icns` generated from `Resources/AppIcon.png` when it exists             |
-| Reverted     | Timer sound picker (the original single Glass sound is kept)                     |
+| Area         | Change                                                                                       |
+| ------------ | -------------------------------------------------------------------------------------------- |
+| Header       | Home and Shelf are icon-only; every header icon has an instant hover tooltip                 |
+| Battery tab  | Two halves: 3-line battery info and a keyboard backlight slider                              |
+| Battery data | Time estimate refreshed on open and while open; system-estimate fallback                     |
+| Timer        | Custom hours / minutes / seconds (max 24:00:00), scroll to adjust, quick buttons, 3:7 layout |
+| Calendar     | All events in 24 h, scrollable; vertical scroll is no longer a swipe on that tab             |
+| Build        | `AppIcon.icns` generated from `Resources/AppIcon.png` when it exists                         |
+| Reverted     | Timer sound picker (the original single Glass sound is kept)                                 |
 
 ## Header
 
@@ -47,6 +47,11 @@ Delta on top of [2026-11-07-dynamac-island-pet-styles-calendar.md](2026-11-07-dy
 ## Timer
 
 - **Entry**: three columns (hr, min, sec), each with up and down chevrons and a text field. Typing keeps the last two digits (so `0` then `7` gives `07`) and clamps to the unit. The chevrons wrap (59 to 0).
+- **Scroll to adjust**: hovering a column and scrolling changes that unit, so large changes need no clicking. The chevrons and typing still work.
+  - Hover is tracked per column (`hoveredUnit`). While the panel is on screen, `TimerPanel` installs a local `NSEvent` monitor for `scrollWheel` (added in `onAppear`, removed in `onDisappear`). When the pointer is over a column and no timer is running, the event is consumed and changes the unit; otherwise it passes through. Only plain values (`ScrollInput`) cross into the main-actor closure, because `NSEvent` is not `Sendable`.
+  - Direction: scrolling up increases and scrolling down decreases, for both trackpad and mouse wheel, regardless of the natural-scrolling setting (`finger = inverted ? deltaY : -deltaY`; negative means up).
+  - Trackpad: 10 points of accumulated delta make one step. Mouse wheel: one step per notch. Momentum events are consumed without effect so the value does not run away after the fingers lift.
+  - Scrolling clamps (hours 0…24, minutes and seconds 0…59) and does not wrap, unlike the chevrons; at 24 hours minutes and seconds are still forced to zero.
 - **Limit**: hours 0…24, minutes and seconds 0…59. At 24 hours minutes and seconds are forced to zero, so the longest timer is 24:00:00. `ActivityCenter.maxTimerSeconds` caps the duration as well.
 - **Start**: a Start button, disabled while the total is zero. `startTimer(minutes:)` became `startTimer(seconds:)`.
 - **Quick buttons**: 1m, 5m, 10m, 15m, 30m, 1h under the picker. They start the timer immediately and also fill the picker.
@@ -58,13 +63,13 @@ Delta on top of [2026-11-07-dynamac-island-pet-styles-calendar.md](2026-11-07-dy
 
 - `CalendarService.refresh()` keeps every event in the next 24 hours (`prefix(3)` was removed). The live activity still uses only the first timed event.
 - `CalendarPanel` puts the list in a vertical `ScrollView` (no indicator) inside the card.
-- **Gestures**: vertical scroll events were consumed as swipe-down (cycle tab) and swipe-up (collapse), which would have closed the island while scrolling. In `IslandGestureMonitor.handleScroll`, the vertical branch now returns `false` when the island is expanded on the Calendar tab, so scrolling reaches the list. On that tab swipe-up no longer collapses and swipe-down no longer cycles tabs; middle-click, the icons and moving the pointer away still work.
+- **Gestures**: vertical scroll events were consumed as swipe-down (cycle tab) and swipe-up (collapse), which would have closed the island while scrolling. In `IslandGestureMonitor.handleScroll`, the vertical branch now returns `false` when the island is expanded on the Calendar or Timer tab, so scrolling reaches the event list or the timer fields. On those tabs swipe-up no longer collapses and swipe-down no longer cycles tabs; middle-click, the icons and moving the pointer away still work.
 
 ## Build and icon
 
 - `Resources/Info.plist` has `CFBundleIconFile = AppIcon`.
 - `scripts/bundle.sh` builds `AppIcon.icns` with `sips` and `iconutil` (16 to 512 px plus @2x) from `Resources/AppIcon.png` when that file exists, and skips the step otherwise.
-- `Resources/AppIcon.png` is not committed. The image tried locally is another app's icon, so it must not be published; use your own artwork (square, ideally 1024 × 1024). The 480 px source was upscaled for the largest sizes.
+- `Resources/AppIcon.png` (480 × 480, upscaled for the largest sizes) may be committed: the owner approved it. The image is another app's icon, so if the repository is public the owner carries the risk of a rights claim; swapping in artwork of their own (square, ideally 1024 × 1024) needs only a file replacement.
 - The menu bar item still uses the `capsule.fill` SF Symbol.
 
 ## Energy
@@ -75,4 +80,4 @@ Delta on top of [2026-11-07-dynamac-island-pet-styles-calendar.md](2026-11-07-dy
 ## Testing
 
 - `swift build` succeeds and `./scripts/test.sh` passes (14 tests in 4 suites). No new unit tests: the changes are view and service glue.
-- Not yet inspected on a running app: tooltips, the battery panel, the 3:7 timer layout, the calendar scroll, and the keyboard backlight slider under low light (the fix for the slider falling back is untested).
+- Not yet inspected on a running app: tooltips, the battery panel, the 3:7 timer layout, scrolling the timer fields (including the scroll direction), the calendar scroll, and the keyboard backlight slider under low light (the fix for the slider falling back is untested).
