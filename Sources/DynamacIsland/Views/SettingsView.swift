@@ -88,7 +88,7 @@ struct SettingsView: View {
                 Slider(value: $settings.notchHeightOffset, in: -8...12, step: 1)
                 Text("\(Int(settings.notchHeightOffset)) pt").monospacedDigit().frame(width: 48, alignment: .trailing)
             }
-            Button("Reset") { settings.notchWidthOffset = 0; settings.notchHeightOffset = 0 }
+            Button("Reset") { settings.notchWidthOffset = -20; settings.notchHeightOffset = 0 }
         }
         Section("Expanded size") {
             LabeledContent("Width") {

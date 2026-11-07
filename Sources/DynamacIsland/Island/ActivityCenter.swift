@@ -21,7 +21,7 @@ enum TransientActivity: Equatable {
     /// Whether the right side needs extra room (longer labels).
     var isWide: Bool {
         switch self {
-        case .bluetooth, .focus, .eventSoon, .lowPowerMode, .linkCopied: return true
+        case .bluetooth, .focus, .eventSoon, .lowPowerMode, .linkCopied, .timerDone: return true
         default: return false
         }
     }
@@ -86,8 +86,10 @@ final class ActivityCenter: ObservableObject {
 
     // MARK: Timer (a single one-shot Timer at the end date; no per-second ticking)
 
-    func startTimer(minutes: Double) {
-        timer.start(duration: minutes * 60)
+    static let maxTimerSeconds = 24 * 3600
+
+    func startTimer(seconds: Int) {
+        timer.start(duration: TimeInterval(min(seconds, Self.maxTimerSeconds)))
         scheduleTimerFire()
     }
 

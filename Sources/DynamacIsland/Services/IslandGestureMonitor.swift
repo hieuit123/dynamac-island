@@ -55,6 +55,8 @@ final class IslandGestureMonitor {
             return handleHorizontal(vm, finger: fingerX, isEnd: isEnd)
         }
         guard settings.verticalSwipeGestures else { return false }
+        // The calendar list and the timer fields scroll vertically, so they keep those events instead of treating them as swipes.
+        if vm.state == .expanded, vm.tab == .calendar || vm.tab == .timer { return false }
         if !fired, abs(fingerY) > 40 {
             fired = true
             fingerY > 0 ? swipeDown(vm) : swipeUp(vm)

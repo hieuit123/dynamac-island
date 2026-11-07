@@ -152,7 +152,7 @@ final class CalendarService: ObservableObject {
         let events = store.events(matching: predicate)
             .filter { $0.endDate > now && include($0) }
             .sorted { ($0.isAllDay ? 1 : 0, $0.startDate) < ($1.isAllDay ? 1 : 0, $1.startDate) }
-        upcoming = events.prefix(3).map(Self.info)
+        upcoming = events.map(Self.info)
         scheduleLiveActivity(events.first { !$0.isAllDay }.map(Self.info), now: now)
     }
 
