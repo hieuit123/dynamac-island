@@ -4,15 +4,15 @@ Delta on top of [2026-11-07-dynamac-island-pet-styles-calendar.md](2026-11-07-dy
 
 ## Summary
 
-| Area | Change |
-| --- | --- |
-| Header | Home and Shelf are icon-only; every header icon has an instant hover tooltip |
-| Battery tab | Two halves: 3-line battery info and a keyboard backlight slider |
-| Battery data | Time estimate refreshed on open and while open; system-estimate fallback |
-| Timer | Custom hours / minutes / seconds (max 24:00:00), quick buttons, 3:7 layout |
-| Calendar | All events in 24 h, scrollable; vertical scroll is no longer a swipe on that tab |
-| Build | `AppIcon.icns` generated from `Resources/AppIcon.png` when it exists |
-| Reverted | Timer sound picker (the original single Glass sound is kept) |
+| Area         | Change                                                                           |
+| ------------ | -------------------------------------------------------------------------------- |
+| Header       | Home and Shelf are icon-only; every header icon has an instant hover tooltip     |
+| Battery tab  | Two halves: 3-line battery info and a keyboard backlight slider                  |
+| Battery data | Time estimate refreshed on open and while open; system-estimate fallback         |
+| Timer        | Custom hours / minutes / seconds (max 24:00:00), quick buttons, 3:7 layout       |
+| Calendar     | All events in 24 h, scrollable; vertical scroll is no longer a swipe on that tab |
+| Build        | `AppIcon.icns` generated from `Resources/AppIcon.png` when it exists             |
+| Reverted     | Timer sound picker (the original single Glass sound is kept)                     |
 
 ## Header
 
@@ -34,8 +34,15 @@ Delta on top of [2026-11-07-dynamac-island-pet-styles-calendar.md](2026-11-07-dy
   - Uses the private `KeyboardBrightnessClient` from `/System/Library/PrivateFrameworks/CoreBrightness.framework`, loaded lazily with `dlopen` (the same approach as `BrightnessControl` for the display).
   - Selectors: `copyKeyboardBacklightIDs` (first ID is the built-in keyboard), `brightnessForKeyboard:` and `setBrightness:forKeyboard:`, called through `class_getMethodImplementation` because they return `float` / `BOOL`.
   - `isAvailable` is false when the class, a selector or a keyboard ID is missing; the panel then shows "No keyboard backlight".
-  - Verified on macOS 26.7.1: the class loads, the keyboard ID is found and the level can be read (it printed 1.0). Setting the level was not verified, and macOS may override a manual value through ambient-light auto brightness.
-- **`LevelSlider`**: a custom slider. A capsule track (8 pt), a white fill and a 16 pt white knob with a shadow. The whole track is the hit area (a `DragGesture` with `minimumDistance: 0`), and the value is written to the backlight on every change.
+  - Verified on macOS 26.7.1: the class loads, the keyboard ID is found, the level can be read, and setting 100% was read back unchanged after 0.3, 1, 3 and 6 s (in a bright room, so the light sensor had no reason to intervene). The original level was restored afterwards.
+  - **Auto brightness**: the setting "Adjust keyboard brightness in low light" was on on the test machine (`isAutoBrightnessEnabledForKeyboard:` returned true), and while it is on the ambient light sensor overrides a manual level, which made the slider appear to "fall back". The idle-dim time was 0 (no idle dimming), so that was ruled out. The drop itself was not reproduced; auto brightness is the likely cause.
+  - `isAutoEnabled` and `setAuto(_:)` wrap `isAutoBrightnessEnabledForKeyboard:` and `enableAutoBrightness:forKeyboard:` (a `BOOL` argument passed as `UInt8`). The class also exposes `setBrightness:fadeSpeed:commit:forKeyboard:`, `idleDimTimeForKeyboard:`, `suspendIdleDimming:forKeyboard:` and others, which are not used.
+- **`LevelSlider`**: a custom slider. A capsule track (8 pt), a white fill and a 16 pt white knob with a shadow. The whole track is the hit area (a `DragGesture` with `minimumDistance: 0`). It reports changes through `onUserChange`, which is called only for drags, not when the value is set from outside (reading the level when the tab opens must not write anything).
+- **Behavior of the control** (`BatteryPanel`)
+  - Dragging the slider turns auto brightness off first, then writes the level.
+  - An "Auto brightness on / off" pill under the slider toggles auto brightness and re-reads the level.
+  - On appear, the panel only reads the level and the auto state.
+  - Auto brightness is a system setting (System Settings → Keyboard), so turning it off persists until it is turned on again, from the pill or from System Settings.
 
 ## Timer
 
@@ -68,4 +75,4 @@ Delta on top of [2026-11-07-dynamac-island-pet-styles-calendar.md](2026-11-07-dy
 ## Testing
 
 - `swift build` succeeds and `./scripts/test.sh` passes (14 tests in 4 suites). No new unit tests: the changes are view and service glue.
-- Not yet inspected on a running app: tooltips, the battery panel, the 3:7 timer layout, the calendar scroll, and setting the keyboard backlight.
+- Not yet inspected on a running app: tooltips, the battery panel, the 3:7 timer layout, the calendar scroll, and the keyboard backlight slider under low light (the fix for the slider falling back is untested).

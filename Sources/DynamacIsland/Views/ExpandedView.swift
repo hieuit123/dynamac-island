@@ -412,6 +412,7 @@ struct TimerPanel: View {
 struct BatteryPanel: View {
     @ObservedObject var battery: BatteryService
     @State private var keyboardLevel = 0.0
+    @State private var keyboardAuto = false
     private let keyboardAvailable = KeyboardBacklight.isAvailable
 
     var body: some View {
@@ -476,14 +477,33 @@ struct BatteryPanel: View {
                 }
                 HStack(spacing: 8) {
                     Image(systemName: "light.min").foregroundStyle(.secondary)
-                    LevelSlider(value: $keyboardLevel, tint: .white)
+                    LevelSlider(value: $keyboardLevel, tint: .white) { level in
+                        // With auto brightness on, the light sensor would undo a manual level.
+                        if keyboardAuto { KeyboardBacklight.setAuto(false); keyboardAuto = false }
+                        KeyboardBacklight.set(Float(level))
+                    }
                     Image(systemName: "light.max").foregroundStyle(.secondary)
                 }
                 .font(.system(size: 12))
+                Button {
+                    keyboardAuto.toggle()
+                    KeyboardBacklight.setAuto(keyboardAuto)
+                    keyboardLevel = Double(KeyboardBacklight.level ?? 0)
+                } label: {
+                    Label(keyboardAuto ? "Auto brightness on" : "Auto brightness off", systemImage: "sun.max")
+                        .font(.system(size: 11, weight: .medium))
+                        .padding(.horizontal, 9).padding(.vertical, 4)
+                        .background(Capsule().fill(Color.white.opacity(keyboardAuto ? 0.18 : 0.08)))
+                        .foregroundStyle(keyboardAuto ? .white : .secondary)
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(PressableStyle())
             }
             .padding(.leading, 22)
-            .onAppear { keyboardLevel = Double(KeyboardBacklight.level ?? 0) }
-            .onChange(of: keyboardLevel) { KeyboardBacklight.set(Float(keyboardLevel)) }
+            .onAppear {
+                keyboardLevel = Double(KeyboardBacklight.level ?? 0)
+                keyboardAuto = KeyboardBacklight.isAutoEnabled
+            }
         } else {
             Label("No keyboard backlight", systemImage: "keyboard")
                 .font(.system(size: 12)).foregroundStyle(.secondary)
@@ -501,6 +521,8 @@ struct BatteryPanel: View {
 private struct LevelSlider: View {
     @Binding var value: Double
     let tint: Color
+    /// Called only for changes made by the user, not when the value is set from outside.
+    var onUserChange: (Double) -> Void = { _ in }
     private let knob: CGFloat = 16
 
     var body: some View {
@@ -519,6 +541,7 @@ private struct LevelSlider: View {
             .contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 0).onChanged { drag in
                 value = min(max((drag.location.x - knob / 2) / travel, 0), 1)
+                onUserChange(value)
             })
         }
         .frame(height: knob)
