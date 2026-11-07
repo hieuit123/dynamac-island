@@ -131,13 +131,15 @@ final class AppActivities {
     let battery: BatteryService
     let calendar: CalendarService
     let shelf: ShelfStore
+    let pet: PetStore
 
     init(center: ActivityCenter, nowPlaying: NowPlayingService, battery: BatteryService,
-         calendar: CalendarService, shelf: ShelfStore) {
+         calendar: CalendarService, shelf: ShelfStore, pet: PetStore) {
         self.center = center
         self.nowPlaying = nowPlaying
         self.battery = battery
         self.calendar = calendar
         self.shelf = shelf
+        self.pet = pet
     }
 }

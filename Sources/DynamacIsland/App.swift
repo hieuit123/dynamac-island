@@ -62,8 +62,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private let battery = BatteryService()
     private lazy var calendar = CalendarService(settings: settings, center: center)
     private let shelf = ShelfStore(fileURL: ShelfStore.defaultFileURL())
+    private let pet = PetStore(fileURL: PetStore.defaultFileURL())
     private lazy var activities = AppActivities(center: center, nowPlaying: nowPlaying, battery: battery,
-                                                calendar: calendar, shelf: shelf)
+                                                calendar: calendar, shelf: shelf, pet: pet)
     private let mediaKeys = MediaKeyService()
     private lazy var hudState = HUDPermissionState(keys: mediaKeys)
     private let power = PowerStateMonitor()
@@ -163,7 +164,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 self?.nowPlaying.refreshDetails()
             }
             let root = IslandRootView(vm: vm, center: center, settings: settings, nowPlaying: nowPlaying, battery: battery,
-                                      calendar: calendar, shelf: shelf)
+                                      calendar: calendar, shelf: shelf, pet: pet)
             islands.append(IslandController(displayID: id, vm: vm, settings: settings, visibility: visibility, content: root))
         }
     }

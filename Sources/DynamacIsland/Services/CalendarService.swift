@@ -28,6 +28,7 @@ final class CalendarService: ObservableObject {
     /// One-shot timers only (lead time, event start, next refresh) – nothing ticks in between.
     private var timers: [Timer] = []
     private var alertedEventIDs = Set<String>()
+    private var syncTimer: Timer?
 
     init(settings: AppSettings, center: ActivityCenter) {
         self.settings = settings
@@ -44,6 +45,39 @@ final class CalendarService: ObservableObject {
             .receive(on: RunLoop.main)
             .sink { [weak self] in self?.refresh() }
             .store(in: &cancellables)
+        settings.$showCalendar.removeDuplicates().dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] enabled in
+                if enabled { self?.startRemoteSync() } else { self?.stopRemoteSync() }
+                if enabled { self?.syncNow() } else { self?.refresh() }
+            }
+            .store(in: &cancellables)
+        if settings.showCalendar { startRemoteSync() }
+        refresh()
+    }
+
+    /// Remote accounts (Google, Exchange) only sync when asked; pull changes every few minutes, they arrive via EKEventStoreChanged.
+    private func startRemoteSync() {
+        guard syncTimer == nil else { return }
+        let timer = Timer(timeInterval: 300, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.access == .granted else { return }
+                self.store.refreshSourcesIfNecessary()
+            }
+        }
+        timer.tolerance = 60
+        RunLoop.main.add(timer, forMode: .common)
+        syncTimer = timer
+    }
+
+    private func stopRemoteSync() {
+        syncTimer?.invalidate()
+        syncTimer = nil
+    }
+
+    /// Re-reads local events now and asks remote accounts to pull; late changes arrive via EKEventStoreChanged.
+    func syncNow() {
+        if settings.showCalendar, access == .granted { store.refreshSourcesIfNecessary() }
         refresh()
     }
 
@@ -108,7 +142,7 @@ final class CalendarService: ObservableObject {
     func refresh() {
         timers.forEach { $0.invalidate() }
         timers.removeAll()
-        guard access == .granted else {
+        guard settings.showCalendar, access == .granted else {
             upcoming = []
             center.upcomingEvent = nil
             return

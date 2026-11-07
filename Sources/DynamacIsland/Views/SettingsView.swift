@@ -24,12 +24,24 @@ struct SettingsView: View {
     // MARK: General
 
     @ViewBuilder private var general: some View {
-        Section("Black hole effect") {
-            Picker("Style", selection: $settings.effectStyle) {
-                ForEach(EffectStyle.allCases) { Text($0.title).tag($0) }
+        Section("Style") {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(EffectStyle.allCases) { style in
+                        EffectPreview(style: style)
+                            .frame(width: 240, height: 110)
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 12)
+                                    .strokeBorder(Color.accentColor, lineWidth: settings.effectStyle == style ? 3 : 0)
+                            }
+                            .contentShape(RoundedRectangle(cornerRadius: 12))
+                            .onTapGesture { settings.effectStyle = style }
+                            .accessibilityLabel(style.title)
+                            .accessibilityAddTraits(settings.effectStyle == style ? [.isButton, .isSelected] : .isButton)
+                    }
+                }
+                .padding(3)
             }
-            .pickerStyle(.segmented)
-            EffectPreview(style: settings.effectStyle).frame(maxWidth: .infinity).frame(height: 110)
         }
         Section("Behavior") {
             Toggle("Expand on hover (instead of click)", isOn: $settings.expandOnHover)
@@ -78,9 +90,22 @@ struct SettingsView: View {
             }
             Button("Reset") { settings.notchWidthOffset = 0; settings.notchHeightOffset = 0 }
         }
+        Section("Expanded size") {
+            LabeledContent("Width") {
+                Slider(value: $settings.expandedWidthOffset, in: -100...200, step: 4)
+                Text("\(Int(IslandMetrics.expandedSize.width + settings.expandedWidthOffset)) pt").monospacedDigit().frame(width: 56, alignment: .trailing)
+            }
+            LabeledContent("Height") {
+                Slider(value: $settings.expandedHeightOffset, in: -30...90, step: 2)
+                Text("\(Int(IslandMetrics.expandedSize.height + settings.expandedHeightOffset)) pt").monospacedDigit().frame(width: 56, alignment: .trailing)
+            }
+            Button("Reset") { settings.expandedWidthOffset = 0; settings.expandedHeightOffset = 0 }
+        }
         Section("Widgets") {
             Toggle("Now Playing", isOn: $settings.showMusic)
             Toggle("Calendar", isOn: $settings.showCalendar)
+            Toggle("Timer", isOn: $settings.showTimer)
+            Toggle("Virtual pet", isOn: $settings.showPet)
             Toggle("Battery", isOn: $settings.showBattery)
         }
     }

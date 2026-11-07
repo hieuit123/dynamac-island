@@ -7,6 +7,7 @@ enum CollapsedActivity: Equatable {
     case timer
     case event(CalendarService.EventInfo)
     case music
+    case pet
 }
 
 struct IslandRootView: View {
@@ -17,6 +18,7 @@ struct IslandRootView: View {
     @ObservedObject var battery: BatteryService
     @ObservedObject var calendar: CalendarService
     @ObservedObject var shelf: ShelfStore
+    @ObservedObject var pet: PetStore
 
     private var activity: CollapsedActivity? {
         if let hud = center.hud { return .hud(hud) }
@@ -27,7 +29,7 @@ struct IslandRootView: View {
            center.dismissedActivityID != "music:" + track.title {
             return .music
         }
-        return nil
+        return settings.showPet ? .pet : nil
     }
 
     private func sideWidth(_ activity: CollapsedActivity) -> CGFloat {
@@ -61,7 +63,11 @@ struct IslandRootView: View {
     }
 
     private var islandSize: CGSize {
-        if vm.state == .expanded { return IslandMetrics.expandedSize }
+        if vm.state == .expanded {
+            let base = IslandMetrics.expandedSize, limit = IslandMetrics.maxExpandedSize
+            return CGSize(width: min(base.width + settings.expandedWidthOffset, limit.width),
+                          height: min(base.height + settings.expandedHeightOffset, limit.height))
+        }
         var width = vm.notchSize.width + 2 * radii.top
         var height = vm.notchSize.height
         if let activity { width += 2 * sideWidth(activity) }
@@ -130,11 +136,11 @@ struct IslandRootView: View {
     private func content(flare: CGFloat) -> some View {
         if vm.state == .expanded {
             ExpandedView(vm: vm, center: center, settings: settings, nowPlaying: nowPlaying, battery: battery,
-                         calendar: calendar, shelf: shelf)
+                         calendar: calendar, shelf: shelf, pet: pet)
                 .padding(.horizontal, flare)
                 .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .top)))
         } else if let activity {
-            CollapsedActivityView(activity: activity, vm: vm, center: center, settings: settings, nowPlaying: nowPlaying)
+            CollapsedActivityView(activity: activity, vm: vm, center: center, settings: settings, nowPlaying: nowPlaying, pet: pet)
                 .frame(height: vm.notchSize.height)
                 .padding(.horizontal, flare + (vm.pillMode ? 12 : 10))
                 .transition(.opacity)
@@ -148,6 +154,7 @@ struct CollapsedActivityView: View {
     @ObservedObject var center: ActivityCenter
     @ObservedObject var settings: AppSettings
     @ObservedObject var nowPlaying: NowPlayingService
+    @ObservedObject var pet: PetStore
 
     var body: some View {
         HStack(spacing: 0) {
@@ -191,6 +198,8 @@ struct CollapsedActivityView: View {
             AlbumArtwork(image: nowPlaying.artwork, palette: nowPlaying.palette, isPlaying: nowPlaying.isPlaying,
                          size: 22, cornerRadius: 6, trackID: nowPlaying.track.map { $0.title + $0.artist } ?? "")
                 .offset(x: vm.swipeOffset * 0.3)
+        case .pet:
+            PetGlyph(store: pet, size: 16)
         }
     }
 
@@ -241,6 +250,8 @@ struct CollapsedActivityView: View {
             }
         case .music:
             MusicWaveform(palette: nowPlaying.palette, animate: settings.animatedWaveform && nowPlaying.isPlaying)
+        case .pet:
+            PetMoodBadge(store: pet)
         }
     }
 }
