@@ -21,7 +21,7 @@ enum TransientActivity: Equatable {
     /// Whether the right side needs extra room (longer labels).
     var isWide: Bool {
         switch self {
-        case .bluetooth, .focus, .eventSoon, .lowPowerMode, .linkCopied: return true
+        case .bluetooth, .focus, .eventSoon, .lowPowerMode, .linkCopied, .timerDone: return true
         default: return false
         }
     }

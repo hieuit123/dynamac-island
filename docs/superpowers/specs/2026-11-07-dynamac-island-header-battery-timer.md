@@ -81,6 +81,7 @@ Delta on top of [2026-11-07-dynamac-island-pet-styles-calendar.md](2026-11-07-dy
   - Taller: `timerControlsHeight` (34 pt) is added below the notch-height row. The top row keeps the timer icon on the left and the countdown on the right, aligned with the notch.
   - The second row holds two buttons. **Pause** pauses the timer and turns into **Resume**; the island stays as it is, with the paused time dimmed. **Cancel** stops the timer, so the activity ends and the island collapses back to its normal size.
   - The extra size appears and disappears with the existing activity animation; the window frame is fixed, so nothing is repositioned.
+  - **"Done" alert**: with the −20 pt width the word "Done" was pushed against the island's edge and clipped, because `TransientActivity.timerDone` used the narrow 46 pt side width. It now counts as a wide alert (`isWide`, 100 pt per side) like the Bluetooth and Focus alerts.
   - **Hover**: hovering the island used to peek or expand it (with "expand on hover" on, it opened fully), which moved the buttons away before they could be clicked. `IslandViewModel.hoverChanged` now ignores hover while `showsTimerControls` is true (the timer is active and no HUD or alert is showing). To open the island during a countdown, click its background, swipe down or middle-click. The pointer leaving still collapses as before.
 - Not yet checked on a running app, in particular that the buttons receive clicks (the island itself has a tap-to-expand gesture) and that the second row clears the notch on a hardware-notch display.
 
