@@ -72,9 +72,22 @@ Delta on top of [2026-11-07-dynamac-island-pet-styles-calendar.md](2026-11-07-dy
 - `Resources/AppIcon.png` is the owner's own artwork: a 1024 × 1024 PNG with transparent rounded corners (downscaled from a 2048 × 2048 original). It replaced a 480 px placeholder taken from another app's store listing; that earlier file is still in the git history of this branch.
 - The menu bar item still uses the `capsule.fill` SF Symbol.
 
+## Collapsed width and the timer countdown
+
+- The default `notchWidthOffset` is now −20 pt (was 0). A saved value is kept, and Reset in Settings → Island → Fine tuning goes back to −20.
+- With −20 pt the music activity fits, but a running timer clipped its digits (for example `1:00:00`). Two earlier attempts were dropped: a "Width during timer" slider, and a fixed 0 pt offset during the countdown.
+- **Countdown layout** (`CollapsedActivityView`, `IslandRootView.islandSize`): while the collapsed island shows `CollapsedActivity.timer` it is larger than for other activities.
+  - Wider: the side width for `.timer` is 62 pt per side (46 pt for most activities), so the digits fit even with the −20 pt offset.
+  - Taller: `timerControlsHeight` (34 pt) is added below the notch-height row. The top row keeps the timer icon on the left and the countdown on the right, aligned with the notch.
+  - The second row holds two buttons. **Pause** pauses the timer and turns into **Resume**; the island stays as it is, with the paused time dimmed. **Cancel** stops the timer, so the activity ends and the island collapses back to its normal size.
+  - The extra size appears and disappears with the existing activity animation; the window frame is fixed, so nothing is repositioned.
+  - **Hover**: hovering the island used to peek or expand it (with "expand on hover" on, it opened fully), which moved the buttons away before they could be clicked. `IslandViewModel.hoverChanged` now ignores hover while `showsTimerControls` is true (the timer is active and no HUD or alert is showing). To open the island during a countdown, click its background, swipe down or middle-click. The pointer leaving still collapses as before.
+- Not yet checked on a running app, in particular that the buttons receive clicks (the island itself has a tap-to-expand gesture) and that the second row clears the notch on a hardware-notch display.
+
 ## Energy
 
 - Battery: one 15 s timer, alive only while the Battery panel is on screen.
+- Hover exit: the island now collapses 0.05 s after the pointer leaves (it was 0.4 s expanded and 0.15 s peeking). The safety check that catches a missed mouse-exit now runs every 0.25 s (was 0.5 s) and waits 0.05 s (was 0.3 s) before collapsing; it still exists only while the island is open. The 0.34 s collapse animation and the invisible hit-slop around the island (14 pt on the sides, 8 pt below) are unchanged, so the pointer still counts as inside until it leaves that margin.
 - Everything else from the earlier specs is unchanged.
 
 ## Testing

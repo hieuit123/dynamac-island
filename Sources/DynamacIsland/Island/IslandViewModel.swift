@@ -59,6 +59,12 @@ final class IslandViewModel: ObservableObject {
 
     private var isSuspended: Bool { activities.center.isSuspended }
 
+    /// The collapsed countdown shows Pause and Cancel; hovering must not open the island or the buttons could not be reached.
+    private var showsTimerControls: Bool {
+        let center = activities.center
+        return center.timer.isActive && center.hud == nil && center.transient == nil
+    }
+
     /// Tracking areas can miss a mouse-exit on fast pointer jumps; poll slowly only while the island is open.
     private func updateExitWatchdog() {
         guard state != .collapsed else {
@@ -67,11 +73,11 @@ final class IslandViewModel: ObservableObject {
             return
         }
         guard exitWatchdog == nil else { return }
-        let timer = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self, self.collapseWork == nil, !self.isDropTargeted, !self.isDraggingOut,
                       !self.mouseInsideProbe() else { return }
-                self.scheduleCollapse(after: 0.3)
+                self.scheduleCollapse(after: 0.05)
             }
         }
         timer.tolerance = 0.2
@@ -112,7 +118,7 @@ final class IslandViewModel: ObservableObject {
         if inside {
             if ignoreHoverUntilExit { return }
             cancelPendingCollapse()
-            guard state == .collapsed, !isSuspended else { return }
+            guard state == .collapsed, !isSuspended, !showsTimerControls else { return }
             let delay = settings.hoverDelay
             guard delay > 0 else { return activateFromHover() }
             let work = DispatchWorkItem { [weak self] in
@@ -123,7 +129,7 @@ final class IslandViewModel: ObservableObject {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
         } else {
             ignoreHoverUntilExit = false
-            scheduleCollapse(after: state == .expanded ? 0.4 : 0.15)
+            scheduleCollapse(after: 0.05)
         }
     }
 

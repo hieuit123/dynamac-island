@@ -37,6 +37,7 @@ struct IslandRootView: View {
         case .hud: return settings.hudShowPercentage ? 118 : 92
         case let .transient(t): return t.isWide ? 100 : 46
         case .event: return 60
+        case .timer: return 62
         default: return 46
         }
     }
@@ -70,6 +71,8 @@ struct IslandRootView: View {
         }
         var width = vm.notchSize.width + 2 * radii.top
         var height = vm.notchSize.height
+        // The countdown shows a second row with Pause and Cancel.
+        if case .timer = activity { height += CollapsedActivityView.timerControlsHeight }
         if let activity { width += 2 * sideWidth(activity) }
         if vm.state == .peek { width += 28; height += 6 }
         return CGSize(width: width, height: height)
@@ -141,7 +144,8 @@ struct IslandRootView: View {
                 .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .top)))
         } else if let activity {
             CollapsedActivityView(activity: activity, vm: vm, center: center, settings: settings, nowPlaying: nowPlaying, pet: pet)
-                .frame(height: vm.notchSize.height)
+                .frame(height: vm.notchSize.height + (activity == .timer ? CollapsedActivityView.timerControlsHeight : 0),
+                       alignment: .top)
                 .padding(.horizontal, flare + (vm.pillMode ? 12 : 10))
                 .transition(.opacity)
         }
@@ -157,12 +161,42 @@ struct CollapsedActivityView: View {
     @ObservedObject var pet: PetStore
 
     var body: some View {
-        HStack(spacing: 0) {
-            leading.frame(maxWidth: .infinity, alignment: .leading)
-            trailing.frame(maxWidth: .infinity, alignment: .trailing)
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                leading.frame(maxWidth: .infinity, alignment: .leading)
+                trailing.frame(maxWidth: .infinity, alignment: .trailing)
+            }
+            .frame(height: vm.notchSize.height)
+            if activity == .timer { timerControls }
         }
         .font(.system(size: 12, weight: .semibold, design: .rounded))
         .lineLimit(1)
+    }
+
+    static let timerControlsHeight: CGFloat = 34
+
+    /// Pause keeps the timer (and this view) as it is; Cancel ends it, which collapses the island.
+    private var timerControls: some View {
+        let paused = center.timer.endDate == nil
+        return HStack(spacing: 8) {
+            timerButton(paused ? "Resume" : "Pause", symbol: paused ? "play.fill" : "pause.fill", tint: .orange) {
+                paused ? center.resumeTimer() : center.pauseTimer()
+            }
+            timerButton("Cancel", symbol: "xmark", tint: .white.opacity(0.75)) { center.stopTimer() }
+        }
+        .frame(height: Self.timerControlsHeight, alignment: .center)
+    }
+
+    private func timerButton(_ title: String, symbol: String, tint: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: symbol)
+                .font(.system(size: 11, weight: .semibold))
+                .padding(.horizontal, 12).padding(.vertical, 4)
+                .background(Capsule().fill(tint.opacity(0.2)))
+                .foregroundStyle(tint)
+                .contentShape(Capsule())
+        }
+        .buttonStyle(PressableStyle())
     }
 
     @ViewBuilder private var leading: some View {
