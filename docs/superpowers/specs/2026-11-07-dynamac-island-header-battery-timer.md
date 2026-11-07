@@ -69,7 +69,7 @@ Delta on top of [2026-11-07-dynamac-island-pet-styles-calendar.md](2026-11-07-dy
 
 - `Resources/Info.plist` has `CFBundleIconFile = AppIcon`.
 - `scripts/bundle.sh` builds `AppIcon.icns` with `sips` and `iconutil` (16 to 512 px plus @2x) from `Resources/AppIcon.png` when that file exists, and skips the step otherwise.
-- `Resources/AppIcon.png` (480 × 480, upscaled for the largest sizes) may be committed: the owner approved it. The image is another app's icon, so if the repository is public the owner carries the risk of a rights claim; swapping in artwork of their own (square, ideally 1024 × 1024) needs only a file replacement.
+- `Resources/AppIcon.png` is the owner's own artwork: a 1024 × 1024 PNG with transparent rounded corners (downscaled from a 2048 × 2048 original). It replaced a 480 px placeholder taken from another app's store listing; that earlier file is still in the git history of this branch.
 - The menu bar item still uses the `capsule.fill` SF Symbol.
 
 ## Energy

@@ -27,6 +27,6 @@ Native macOS 14+ app (Swift, SwiftUI + AppKit, SwiftPM). Testable logic lives in
 
 ## Things to avoid
 
-- `Resources/AppIcon.png` may be committed (the owner approved it); `bundle.sh` skips the icon when the file is missing. It is another app's icon, so the owner is responsible for the rights if the repository is public. Do not add other third-party artwork without being asked.
+- `Resources/AppIcon.png` is the owner's own artwork (1024 × 1024) and may be committed; `bundle.sh` skips the icon when the file is missing. Do not add other third-party artwork without being asked.
 - Do not add notification scraping for other apps (the Notification Center database approach was tried and removed).
 - The app is ad-hoc signed, so rebuilding resets Accessibility, Calendar and Automation permissions.
