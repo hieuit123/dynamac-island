@@ -148,7 +148,7 @@ final class CalendarService: ObservableObject {
         guard settings.showCalendar, access == .granted else {
             upcoming = []
             nextEvent = nil
-            center.upcomingEvent = nil
+            center.setUpcomingEvents([])
             return
         }
         let now = Date()
@@ -162,7 +162,9 @@ final class CalendarService: ObservableObject {
             let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start.addingTimeInterval(24 * 3600)
             upcoming = events(from: start, to: end, now: nil).map(Self.info)
         }
-        scheduleLiveActivity(today.first { !$0.isAllDay }.map(Self.info), now: now)
+        // Events past their window are dropped here, so every refresh time computed below lies in the future.
+        let pending = today.filter { !$0.isAllDay && $0.startDate.addingTimeInterval(Self.nowWindow) > now }
+        scheduleLiveActivities(pending.map(Self.info), now: now)
     }
 
     /// Events in the range, all-day ones last. With `now` set, events that already ended are dropped.
@@ -195,31 +197,38 @@ final class CalendarService: ObservableObject {
                   location: event.location)
     }
 
-    private func scheduleLiveActivity(_ event: EventInfo?, now: Date) {
+    /// How long an event stays on the island after it starts.
+    private static let nowWindow: TimeInterval = 5 * 60
+
+    /// An event is shown from `lead` before its start until `nowWindow` after it; `events` are sorted by start.
+    private func scheduleLiveActivities(_ events: [EventInfo], now: Date) {
         // Refresh at midnight too, so the list switches to the new day.
         var nextRefresh = min(now.addingTimeInterval(3 * 3600), Self.startOfTomorrow(after: now))
         defer { schedule(at: nextRefresh) { [weak self] in self?.refresh() } }
 
-        guard let event, settings.calendarLiveActivity else {
-            center.upcomingEvent = nil
+        guard settings.calendarLiveActivity else {
+            center.setUpcomingEvents([])
             return
         }
         let lead = TimeInterval(settings.calendarLeadMinutes * 60)
-        let showFrom = event.start.addingTimeInterval(-lead)
-        let showUntil = event.start.addingTimeInterval(5 * 60)
-        if now >= showFrom && now < showUntil {
-            activate(event)
-            nextRefresh = min(nextRefresh, showUntil)
-        } else {
-            center.upcomingEvent = nil
-            nextRefresh = min(nextRefresh, showFrom)
+        var active: [EventInfo] = []
+        for event in events {
+            let showFrom = event.start.addingTimeInterval(-lead)
+            if now >= showFrom {
+                active.append(event)
+                nextRefresh = min(nextRefresh, event.start.addingTimeInterval(Self.nowWindow))
+            } else {
+                nextRefresh = min(nextRefresh, showFrom)
+            }
         }
+        center.setUpcomingEvents(active)
+        alert(active.filter { !alertedEventIDs.contains($0.id) })
     }
 
-    private func activate(_ event: EventInfo) {
-        center.upcomingEvent = event
-        guard settings.timeToLeaveAlert, !alertedEventIDs.contains(event.id) else { return }
-        alertedEventIDs.insert(event.id)
+    /// One alert for the earliest of the events that just appeared.
+    private func alert(_ events: [EventInfo]) {
+        guard settings.timeToLeaveAlert, let event = events.first else { return }
+        alertedEventIDs.formUnion(events.map(\.id))
         let minutes = max(Int(event.start.timeIntervalSinceNow / 60), 0)
         center.showTransient(.eventSoon(title: event.title, minutes: minutes, color: event.color), duration: 5, sound: "Ping")
     }

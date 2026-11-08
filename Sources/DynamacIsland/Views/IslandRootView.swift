@@ -5,7 +5,7 @@ enum CollapsedActivity: Equatable {
     case hud(HUDKind)
     case transient(TransientActivity)
     case timer
-    case event(CalendarService.EventInfo)
+    case events([CalendarService.EventInfo])
     case music
     case pet
 }
@@ -24,7 +24,8 @@ struct IslandRootView: View {
         if let hud = center.hud { return .hud(hud) }
         if let transient = center.transient { return .transient(transient) }
         if center.timer.isActive { return .timer }
-        if let event = center.upcomingEvent, center.dismissedActivityID != "event:" + event.id { return .event(event) }
+        let events = center.visibleEvents
+        if !events.isEmpty { return .events(Array(events.prefix(CollapsedActivityView.maxEventRows))) }
         if settings.showMusic, let track = nowPlaying.track, nowPlaying.isPlaying || settings.showMusicWhenPaused,
            center.dismissedActivityID != "music:" + track.title {
             return .music
@@ -36,7 +37,7 @@ struct IslandRootView: View {
         switch activity {
         case .hud: return settings.hudShowPercentage ? 118 : 92
         case let .transient(t): return t.isWide ? 100 : 46
-        case .event: return 60
+        case .events: return 130
         case .timer: return 62
         default: return 46
         }
@@ -71,8 +72,8 @@ struct IslandRootView: View {
         }
         var width = vm.notchSize.width + 2 * radii.top
         var height = vm.notchSize.height
-        // The countdown shows a second row with Pause and Cancel.
-        if case .timer = activity { height += CollapsedActivityView.timerControlsHeight }
+        // The countdown and the meeting list add rows below the notch row.
+        if let activity { height += CollapsedActivityView.extraHeight(activity) }
         if let activity { width += 2 * sideWidth(activity) }
         if vm.state == .peek { width += 28; height += 6 }
         return CGSize(width: width, height: height)
@@ -144,8 +145,7 @@ struct IslandRootView: View {
                 .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .top)))
         } else if let activity {
             CollapsedActivityView(activity: activity, vm: vm, center: center, settings: settings, nowPlaying: nowPlaying, pet: pet)
-                .frame(height: vm.notchSize.height + (activity == .timer ? CollapsedActivityView.timerControlsHeight : 0),
-                       alignment: .top)
+                .frame(height: vm.notchSize.height + CollapsedActivityView.extraHeight(activity), alignment: .top)
                 .padding(.horizontal, flare + (vm.pillMode ? 12 : 10))
                 .transition(.opacity)
         }
@@ -168,12 +168,51 @@ struct CollapsedActivityView: View {
             }
             .frame(height: vm.notchSize.height)
             if activity == .timer { timerControls }
+            if case let .events(events) = activity { eventRows(events) }
         }
         .font(.system(size: 12, weight: .semibold, design: .rounded))
         .lineLimit(1)
     }
 
     static let timerControlsHeight: CGFloat = 34
+    static let eventRowHeight: CGFloat = 28
+    static let maxEventRows = 5
+
+    static func extraHeight(_ activity: CollapsedActivity) -> CGFloat {
+        switch activity {
+        case .timer: return timerControlsHeight
+        case let .events(events): return CGFloat(events.count) * eventRowHeight + 8
+        default: return 0
+        }
+    }
+
+    private func eventRows(_ events: [CalendarService.EventInfo]) -> some View {
+        VStack(spacing: 0) {
+            ForEach(events, id: \.id) { event in
+                HStack(spacing: 8) {
+                    Circle().fill(Color(nsColor: event.color)).frame(width: 7, height: 7)
+                    Text(event.title).frame(maxWidth: .infinity, alignment: .leading)
+                    TimelineView(.everyMinute) { context in
+                        let minutes = Int(ceil(event.start.timeIntervalSince(context.date) / 60))
+                        Text(minutes <= 0 ? "Now" : "\(minutes)m")
+                            .monospacedDigit()
+                            .foregroundStyle(Color(nsColor: event.color))
+                    }
+                    Button { center.dismissEvent(event.id) } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 9, weight: .bold))
+                            .frame(width: 18, height: 18)
+                            .background(Circle().fill(Color.white.opacity(0.15)))
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(PressableStyle())
+                    .accessibilityLabel("Dismiss \(event.title)")
+                }
+                .frame(height: Self.eventRowHeight)
+            }
+        }
+        .padding(.horizontal, 4)
+    }
 
     /// Pause keeps the timer (and this view) as it is; Cancel ends it, which collapses the island.
     private var timerControls: some View {
@@ -226,8 +265,8 @@ struct CollapsedActivityView: View {
             Image(systemName: "link").foregroundStyle(.cyan)
         case .timer:
             Image(systemName: "timer").foregroundStyle(.orange)
-        case let .event(event):
-            Image(systemName: "calendar").foregroundStyle(Color(nsColor: event.color))
+        case let .events(events):
+            Image(systemName: "calendar").foregroundStyle(Color(nsColor: events.first?.color ?? .systemBlue))
         case .music:
             AlbumArtwork(image: nowPlaying.artwork, palette: nowPlaying.palette, isPlaying: nowPlaying.isPlaying,
                          size: 22, cornerRadius: 6, trackID: nowPlaying.track.map { $0.title + $0.artist } ?? "")
@@ -275,13 +314,8 @@ struct CollapsedActivityView: View {
             .foregroundStyle(.orange)
             .frame(minWidth: 44, alignment: .trailing)
             .fixedSize()
-        case let .event(event):
-            TimelineView(.everyMinute) { context in
-                let minutes = Int(ceil(event.start.timeIntervalSince(context.date) / 60))
-                Text(minutes <= 0 ? "Now" : "\(minutes)m")
-                    .monospacedDigit()
-                    .foregroundStyle(Color(nsColor: event.color))
-            }
+        case let .events(events):
+            Text(events.count == 1 ? "Meeting" : "\(events.count) meetings").foregroundStyle(.white.opacity(0.9))
         case .music:
             MusicWaveform(palette: nowPlaying.palette, animate: settings.animatedWaveform && nowPlaying.isPlaying)
         case .pet:

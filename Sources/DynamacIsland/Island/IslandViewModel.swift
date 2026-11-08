@@ -72,10 +72,10 @@ final class IslandViewModel: ObservableObject {
 
     private var isSuspended: Bool { activities.center.isSuspended }
 
-    /// The collapsed countdown shows Pause and Cancel; hovering must not open the island or the buttons could not be reached.
+    /// The collapsed countdown and the meeting list have buttons; hovering must not open the island or they could not be reached.
     private var showsTimerControls: Bool {
         let center = activities.center
-        return center.timer.isActive && center.hud == nil && center.transient == nil
+        return (center.timer.isActive || !center.visibleEvents.isEmpty) && center.hud == nil && center.transient == nil
     }
 
     /// Tracking areas can miss a mouse-exit on fast pointer jumps; poll slowly only while the island is open.

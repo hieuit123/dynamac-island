@@ -93,8 +93,8 @@ final class IslandGestureMonitor {
         // Dismiss whichever live activity is showing until it changes.
         if center.transient != nil {
             center.dismissTransient()
-        } else if let event = center.upcomingEvent {
-            center.dismissedActivityID = "event:" + event.id
+        } else if !center.visibleEvents.isEmpty {
+            center.dismissAllEvents()
         } else if let track = nowPlaying.track {
             center.dismissedActivityID = "music:" + track.title
         }
