@@ -4,15 +4,15 @@ Delta on top of [2026-11-07-dynamac-island-pet-styles-calendar.md](2026-11-07-dy
 
 ## Summary
 
-| Area         | Change                                                                                       |
-| ------------ | -------------------------------------------------------------------------------------------- |
-| Header       | Home and Shelf are icon-only; every header icon has an instant hover tooltip                 |
-| Battery tab  | Two halves: 3-line battery info and a keyboard backlight slider                              |
-| Battery data | Time estimate refreshed on open and while open; system-estimate fallback                     |
-| Timer        | Custom hours / minutes / seconds (max 24:00:00), scroll to adjust, quick buttons, 3:7 layout |
-| Calendar     | All events in 24 h, scrollable; vertical scroll is no longer a swipe on that tab             |
-| Build        | `AppIcon.icns` generated from `Resources/AppIcon.png` when it exists                         |
-| Reverted     | Timer sound picker (the original single Glass sound is kept)                                 |
+| Area         | Change                                                                                                                                       |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Header       | Home and Shelf are icon-only; every header icon has an instant hover tooltip                                                                 |
+| Battery tab  | Two halves: 3-line battery info and a keyboard backlight slider                                                                              |
+| Battery data | Time estimate refreshed on open and while open; system-estimate fallback                                                                     |
+| Timer        | Custom hours / minutes / seconds (max 24:00:00), scroll to adjust, quick buttons, 3:7 layout                                                 |
+| Calendar     | Today's remaining events by default, a dropdown for tomorrow and the day after; scrollable; vertical scroll is no longer a swipe on that tab |
+| Build        | `AppIcon.icns` generated from `Resources/AppIcon.png` when it exists                                                                         |
+| Reverted     | Timer sound picker (the original single Glass sound is kept)                                                                                 |
 
 ## Header
 
@@ -61,7 +61,8 @@ Delta on top of [2026-11-07-dynamac-island-pet-styles-calendar.md](2026-11-07-dy
 
 ## Calendar
 
-- `CalendarService.refresh()` keeps every event in the next 24 hours (`prefix(3)` was removed). The live activity still uses only the first timed event.
+- `CalendarService.refresh()` keeps every event of the current day that has not ended yet (`prefix(3)` was removed). The query runs from now to the start of tomorrow (`startOfTomorrow(after:)`), so tomorrow's events are not shown; an event that started earlier and is still running is. It was first the next 24 hours and was changed to "today" on request. The panel header reads "Today" and the empty state "No more events today.". The refresh timer is capped at midnight, so the list switches to the new day without waiting for the 3-hour refresh. The live activity uses the same list, so an event just after midnight does not trigger it before midnight, and it still uses only the first timed event.
+- **Day dropdown**: a `Menu` next to the date offers Today, Tomorrow and Day after tomorrow, stored in `CalendarService.selectedDay` (0, 1 or 2). The options are an inline `Picker`, so the selected day shows a checkmark (they were plain buttons at first, which gave no sign of the current choice). Today shows events that have not ended; tomorrow and the day after show every event of that calendar day (from its 00:00 to the next 00:00, all-day ones last), with the same filters (declined, subscribed). The shown date, the header label and the empty state ("No events tomorrow.") follow the selection. `refresh()` computes today's list every time (for the live activity and `nextEvent`, which is now a stored property that drives the icon's dot) and the selected day's list for display. Opening the Calendar panel resets the selection to Today. Not verified: the menu on this non-activating panel.
 - `CalendarPanel` puts the list in a vertical `ScrollView` (no indicator) inside the card.
 - **Gestures**: vertical scroll events were consumed as swipe-down (cycle tab) and swipe-up (collapse), which would have closed the island while scrolling. In `IslandGestureMonitor.handleScroll`, the vertical branch now returns `false` when the island is expanded on the Calendar or Timer tab, so scrolling reaches the event list or the timer fields. On those tabs swipe-up no longer collapses and swipe-down no longer cycles tabs; middle-click, the icons and moving the pointer away still work.
 

@@ -81,7 +81,10 @@ struct ExpandedView: View {
 
     private func toggle(_ tab: ExpandedTab) {
         vm.tab = vm.tab == tab ? .home : tab
-        if tab == .calendar { calendar.syncNow() }
+        if tab == .calendar {
+            calendar.selectedDay = 0
+            calendar.syncNow()
+        }
     }
 }
 
@@ -179,18 +182,37 @@ struct HomeView: View {
 struct CalendarPanel: View {
     @ObservedObject var calendar: CalendarService
 
+    private static let dayNames = ["Today", "Tomorrow", "Day after tomorrow"]
+    private var dayName: String { Self.dayNames[min(max(calendar.selectedDay, 0), 2)] }
+    private var shownDate: Date {
+        Calendar.current.date(byAdding: .day, value: calendar.selectedDay, to: Date()) ?? Date()
+    }
+
     var body: some View {
         Card {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Button { calendar.open(nil) } label: {
-                        Text(Date(), format: .dateTime.weekday(.wide).day().month(.wide))
+                        Text(shownDate, format: .dateTime.weekday(.wide).day().month(.wide))
                             .font(.system(size: 13, weight: .bold))
                     }
                     .buttonStyle(PressableStyle())
                     .help("Open calendar")
                     Spacer()
-                    Text("Next 24 hours").font(.system(size: 11)).foregroundStyle(.secondary)
+                    Menu {
+                        Picker("Day", selection: Binding(get: { calendar.selectedDay },
+                                                          set: { calendar.selectedDay = $0; calendar.refresh() })) {
+                            ForEach(Array(Self.dayNames.enumerated()), id: \.offset) { day, name in
+                                Text(name).tag(day)
+                            }
+                        }
+                        .pickerStyle(.inline)
+                        .labelsHidden()
+                    } label: {
+                        Text(dayName).font(.system(size: 11))
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
                 }
                 switch calendar.access {
                 case .notDetermined:
@@ -203,7 +225,7 @@ struct CalendarPanel: View {
                     }
                 case .granted:
                     if calendar.upcoming.isEmpty {
-                        message("No events in the next 24 hours.") { EmptyView() }
+                        message(calendar.selectedDay == 0 ? "No more events today." : "No events \(dayName.lowercased()).") { EmptyView() }
                     } else {
                         ScrollView(.vertical, showsIndicators: false) {
                             VStack(alignment: .leading, spacing: 6) {

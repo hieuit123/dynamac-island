@@ -18,7 +18,10 @@ final class CalendarService: ObservableObject {
 
     @Published private(set) var access: Access
     @Published private(set) var upcoming: [EventInfo] = []
-    var nextEvent: EventInfo? { upcoming.first }
+    /// Day shown in the panel: 0 = today, 1 = tomorrow, 2 = the day after. The live activity and the badge always use today.
+    @Published var selectedDay = 0
+    /// Next event today; drives the dot on the Calendar icon.
+    @Published private(set) var nextEvent: EventInfo?
 
     private let store = EKEventStore()
     private let settings: AppSettings
@@ -144,16 +147,34 @@ final class CalendarService: ObservableObject {
         timers.removeAll()
         guard settings.showCalendar, access == .granted else {
             upcoming = []
+            nextEvent = nil
             center.upcomingEvent = nil
             return
         }
         let now = Date()
-        let predicate = store.predicateForEvents(withStart: now, end: now.addingTimeInterval(24 * 3600), calendars: nil)
-        let events = store.events(matching: predicate)
-            .filter { $0.endDate > now && include($0) }
+        let today = events(from: now, to: Self.startOfTomorrow(after: now), now: now)
+        nextEvent = today.first.map(Self.info)
+        if selectedDay == 0 {
+            upcoming = today.map(Self.info)
+        } else {
+            let calendar = Calendar.current
+            let start = calendar.date(byAdding: .day, value: selectedDay, to: calendar.startOfDay(for: now)) ?? now
+            let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start.addingTimeInterval(24 * 3600)
+            upcoming = events(from: start, to: end, now: nil).map(Self.info)
+        }
+        scheduleLiveActivity(today.first { !$0.isAllDay }.map(Self.info), now: now)
+    }
+
+    /// Events in the range, all-day ones last. With `now` set, events that already ended are dropped.
+    private func events(from start: Date, to end: Date, now: Date?) -> [EKEvent] {
+        store.events(matching: store.predicateForEvents(withStart: start, end: end, calendars: nil))
+            .filter { event in (now.map { $0 < event.endDate } ?? true) && include(event) }
             .sorted { ($0.isAllDay ? 1 : 0, $0.startDate) < ($1.isAllDay ? 1 : 0, $1.startDate) }
-        upcoming = events.map(Self.info)
-        scheduleLiveActivity(events.first { !$0.isAllDay }.map(Self.info), now: now)
+    }
+
+    private static func startOfTomorrow(after date: Date) -> Date {
+        let calendar = Calendar.current
+        return calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: date)) ?? date.addingTimeInterval(24 * 3600)
     }
 
     private func include(_ event: EKEvent) -> Bool {
@@ -175,7 +196,8 @@ final class CalendarService: ObservableObject {
     }
 
     private func scheduleLiveActivity(_ event: EventInfo?, now: Date) {
-        var nextRefresh = now.addingTimeInterval(3 * 3600)
+        // Refresh at midnight too, so the list switches to the new day.
+        var nextRefresh = min(now.addingTimeInterval(3 * 3600), Self.startOfTomorrow(after: now))
         defer { schedule(at: nextRefresh) { [weak self] in self?.refresh() } }
 
         guard let event, settings.calendarLiveActivity else {
