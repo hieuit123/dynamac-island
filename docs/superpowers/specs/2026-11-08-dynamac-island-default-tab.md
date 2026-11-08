@@ -21,6 +21,13 @@
 - While meeting rows are visible, hover does not open the island (same rule as the timer controls); a click still does. Swipe up on the collapsed island dismisses all visible rows.
 - Events starting at the same time are all shown. Rows beyond the fifth are not shown until one leaves.
 
+## Shelf: screenshot thumbnail drops
+
+- The drop target now accepts `.fileURL` and `.image` (`ShelfDrop` in `ShelfView.swift`). The floating thumbnail after Cmd+Shift+4 offers a temporary file that macOS deletes shortly after, or only image data.
+- A file URL inside a temporary folder (`TemporaryItems`, `/var/folders`) is copied to `Application Support/Dynamac Island/Dropped/<uuid>/` before it is added, so the shelf reference survives. Image-only drops are copied from the provider's file representation the same way.
+- Other dropped files are still referenced in place, not copied.
+- Not verified: dragging a real screenshot thumbnail; the exact types the thumbnail offers were assumed, not inspected.
+
 ## Verification
 
 - `swift build` succeeds.

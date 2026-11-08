@@ -117,13 +117,8 @@ struct IslandRootView: View {
         .contentShape(Rectangle())
         // Tap-to-expand only while collapsed/peeking; when expanded, buttons inside must get the clicks.
         .gesture(TapGesture().onEnded { vm.expand() }, including: vm.state == .expanded ? .subviews : .all)
-        .onDrop(of: [.fileURL], isTargeted: $vm.isDropTargeted) { providers in
-            for provider in providers {
-                _ = provider.loadObject(ofClass: URL.self) { url, _ in
-                    guard let url else { return }
-                    DispatchQueue.main.async { shelf.add([url]) }
-                }
-            }
+        .onDrop(of: ShelfDrop.types, isTargeted: $vm.isDropTargeted) { providers in
+            ShelfDrop.load(providers) { urls in shelf.add(urls) }
             vm.didDropFiles()
             return true
         }
