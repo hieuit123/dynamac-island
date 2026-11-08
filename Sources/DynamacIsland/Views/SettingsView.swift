@@ -102,11 +102,33 @@ struct SettingsView: View {
             Button("Reset") { settings.expandedWidthOffset = 0; settings.expandedHeightOffset = 0 }
         }
         Section("Widgets") {
-            Toggle("Now Playing", isOn: $settings.showMusic)
-            Toggle("Calendar", isOn: $settings.showCalendar)
-            Toggle("Timer", isOn: $settings.showTimer)
-            Toggle("Virtual pet", isOn: $settings.showPet)
-            Toggle("Battery", isOn: $settings.showBattery)
+            HStack {
+                Text("Widget")
+                Spacer()
+                Text("Enabled").frame(width: 60)
+                Text("Default").frame(width: 60)
+            }
+            .font(.caption).foregroundStyle(.secondary)
+            ForEach(ExpandedTab.allCases) { tab in
+                HStack {
+                    Text(tab.title)
+                    Spacer()
+                    Toggle(tab.title, isOn: Binding(get: { settings.isEnabled(tab) }, set: { settings.setEnabled(tab, $0) }))
+                        .labelsHidden()
+                        .disabled(tab == .shelf)
+                        .frame(width: 60)
+                    Button { settings.makeDefault(tab) } label: {
+                        Image(systemName: settings.defaultTab == tab ? "largecircle.fill.circle" : "circle")
+                            .foregroundStyle(settings.defaultTab == tab ? Color.accentColor : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .frame(width: 60)
+                    .accessibilityLabel("Default: \(tab.title)")
+                    .accessibilityAddTraits(settings.defaultTab == tab ? [.isButton, .isSelected] : .isButton)
+                }
+            }
+            Text("The default widget opens first when the island expands. Choosing a disabled widget enables it.")
+                .font(.caption).foregroundStyle(.secondary)
         }
     }
 

@@ -3,7 +3,20 @@ import Combine
 import IslandCore
 
 enum IslandState { case collapsed, peek, expanded }
-enum ExpandedTab: CaseIterable { case home, shelf, calendar, timer, battery, pet }
+enum ExpandedTab: String, CaseIterable, Identifiable {
+    case home, shelf, calendar, timer, battery, pet
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .home: return "Home (Now Playing)"
+        case .shelf: return "Shelf"
+        case .calendar: return "Calendar"
+        case .timer: return "Timer"
+        case .battery: return "Battery"
+        case .pet: return "Virtual pet"
+        }
+    }
+}
 
 /// Per-island UI state (one island per display). Shared state lives in `ActivityCenter`.
 @MainActor
@@ -142,6 +155,7 @@ final class IslandViewModel: ObservableObject {
     func expand() {
         cancelPendingCollapse()
         guard state != .expanded else { return }
+        tab = startTab
         state = .expanded
         onExpand()
     }
@@ -155,7 +169,12 @@ final class IslandViewModel: ObservableObject {
     func collapse() {
         cancelPendingCollapse()
         state = .collapsed
-        tab = .home
+        tab = startTab
+    }
+
+    /// The default tab from Settings, or Home when that tab is currently unavailable (disabled, or no battery).
+    private var startTab: ExpandedTab {
+        availableTabs.contains(settings.defaultTab) ? settings.defaultTab : .home
     }
 
     /// Swipe-down / middle-click: expand, or move to the next panel when already expanded.
