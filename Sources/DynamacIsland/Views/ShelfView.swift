@@ -1,5 +1,53 @@
 import IslandCore
 import SwiftUI
+import UniformTypeIdentifiers
+
+/// Loads dropped items; the screenshot thumbnail offers a short-lived temp file or only image data.
+enum ShelfDrop {
+    static let types: [UTType] = [.fileURL, .image]
+
+    private static var storeDir: URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        return base.appendingPathComponent("Dynamac Island/Dropped", isDirectory: true)
+    }
+
+    static func load(_ providers: [NSItemProvider], completion: @escaping ([URL]) -> Void) {
+        for provider in providers {
+            if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+                _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                    guard let url else { return }
+                    let stored = isTemporary(url) ? copyToStore(url) : url
+                    if let stored { DispatchQueue.main.async { completion([stored]) } }
+                }
+            } else if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
+                let type = [UTType.png, .jpeg, .tiff].first { provider.hasItemConformingToTypeIdentifier($0.identifier) } ?? .image
+                provider.loadFileRepresentation(forTypeIdentifier: type.identifier) { url, _ in
+                    guard let url else { return }
+                    let name = provider.suggestedName.map { $0.contains(".") ? $0 : "\($0).\(type.preferredFilenameExtension ?? "png")" }
+                    if let stored = copyToStore(url, name: name) { DispatchQueue.main.async { completion([stored]) } }
+                }
+            }
+        }
+    }
+
+    private static func isTemporary(_ url: URL) -> Bool {
+        let path = url.standardizedFileURL.path
+        return path.contains("/TemporaryItems/") || path.hasPrefix("/var/folders/") || path.hasPrefix("/private/var/folders/")
+    }
+
+    private static func copyToStore(_ source: URL, name: String? = nil) -> URL? {
+        let fm = FileManager.default
+        let dir = storeDir.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let target = dir.appendingPathComponent(name ?? source.lastPathComponent)
+        do {
+            try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+            try fm.copyItem(at: source, to: target)
+            return target
+        } catch {
+            return nil
+        }
+    }
+}
 
 struct ShelfView: View {
     @ObservedObject var vm: IslandViewModel

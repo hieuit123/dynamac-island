@@ -13,7 +13,7 @@ struct ExpandedView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header.frame(height: vm.notchSize.height)
+            header.frame(height: vm.notchSize.height).zIndex(1)
             Group {
                 switch vm.tab {
                 case .home: HomeView(vm: vm, center: center, settings: settings, nowPlaying: nowPlaying)
@@ -35,10 +35,11 @@ struct ExpandedView: View {
 
     private var header: some View {
         HStack(spacing: 0) {
-            HStack(spacing: 6) {
-                TabButton(title: "Home", symbol: "house.fill", selected: vm.tab == .home) { vm.tab = .home }
-                TabButton(title: shelf.items.isEmpty ? "Shelf" : "Shelf \(shelf.items.count)", symbol: "tray.full.fill",
-                          selected: vm.tab == .shelf) { vm.tab = .shelf }
+            HStack(spacing: 4) {
+                HeaderIcon(symbol: "house.fill", title: "Home", selected: vm.tab == .home) { vm.tab = .home }
+                HeaderIcon(symbol: "tray.full.fill",
+                           title: shelf.items.isEmpty ? "Shelf" : "Shelf (\(shelf.items.count))",
+                           selected: vm.tab == .shelf, badge: shelf.items.isEmpty ? nil : .white) { vm.tab = .shelf }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -46,14 +47,14 @@ struct ExpandedView: View {
 
             HStack(spacing: 4) {
                 if settings.showPet {
-                    HeaderIcon(symbol: "pawprint.fill", selected: vm.tab == .pet) { toggle(.pet) }
+                    HeaderIcon(symbol: "pawprint.fill", title: "Pet", selected: vm.tab == .pet) { toggle(.pet) }
                 }
                 if settings.showCalendar {
-                    HeaderIcon(symbol: "calendar", selected: vm.tab == .calendar,
+                    HeaderIcon(symbol: "calendar", title: "Calendar", selected: vm.tab == .calendar,
                                badge: calendar.nextEvent.map { Color(nsColor: $0.color) }) { toggle(.calendar) }
                 }
                 if settings.showTimer {
-                    HeaderIcon(symbol: "timer", selected: vm.tab == .timer,
+                    HeaderIcon(symbol: "timer", title: "Timer", selected: vm.tab == .timer,
                                badge: center.timer.isActive ? .orange : nil) { toggle(.timer) }
                 }
                 if settings.showBattery, battery.hasBattery {
@@ -69,6 +70,7 @@ struct ExpandedView: View {
                         .contentShape(Capsule())
                     }
                     .buttonStyle(PressableStyle())
+                    .instantTooltip("Battery")
                     .padding(.leading, 2)
                 }
             }
@@ -79,33 +81,45 @@ struct ExpandedView: View {
 
     private func toggle(_ tab: ExpandedTab) {
         vm.tab = vm.tab == tab ? .home : tab
-        if tab == .calendar { calendar.syncNow() }
-    }
-}
-
-private struct TabButton: View {
-    let title: String
-    let symbol: String
-    let selected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Label(title, systemImage: symbol)
-                .font(.system(size: 11, weight: .semibold))
-                .padding(.horizontal, 9)
-                .padding(.vertical, 4)
-                .background(Capsule().fill(Color.white.opacity(selected ? 0.16 : 0)))
-                .foregroundStyle(selected ? .white : .secondary)
-                .contentShape(Capsule())
+        if tab == .calendar {
+            calendar.selectedDay = 0
+            calendar.syncNow()
         }
-        .buttonStyle(PressableStyle())
     }
 }
 
-/// Icon button in the right corner; a small dot shows live state (next event color / running timer).
+/// Native `.help` waits about a second; this label shows as soon as the pointer is over the view.
+private struct InstantTooltip: ViewModifier {
+    let text: String
+    @State private var hovering = false
+
+    func body(content: Content) -> some View {
+        content
+            .onHover { hovering = $0 }
+            .overlay(alignment: .bottom) {
+                if hovering {
+                    Text(text)
+                        .font(.system(size: 10.5, weight: .medium))
+                        .padding(.horizontal, 7).padding(.vertical, 3)
+                        .background(Capsule().fill(Color(white: 0.22)))
+                        .fixedSize()
+                        .offset(y: 28)
+                        .transition(.opacity)
+                        .allowsHitTesting(false)
+                }
+            }
+            .animation(.easeOut(duration: 0.1), value: hovering)
+    }
+}
+
+private extension View {
+    func instantTooltip(_ text: String) -> some View { modifier(InstantTooltip(text: text)) }
+}
+
+/// Icon-only header button with a tooltip; a small dot shows live state (next event color / running timer / shelf not empty).
 private struct HeaderIcon: View {
     let symbol: String
+    let title: String
     let selected: Bool
     var badge: Color?
     let action: () -> Void
@@ -123,6 +137,7 @@ private struct HeaderIcon: View {
                 .contentShape(Capsule())
         }
         .buttonStyle(PressableStyle())
+        .instantTooltip(title)
     }
 }
 
@@ -167,18 +182,37 @@ struct HomeView: View {
 struct CalendarPanel: View {
     @ObservedObject var calendar: CalendarService
 
+    private static let dayNames = ["Today", "Tomorrow", "Day after tomorrow"]
+    private var dayName: String { Self.dayNames[min(max(calendar.selectedDay, 0), 2)] }
+    private var shownDate: Date {
+        Calendar.current.date(byAdding: .day, value: calendar.selectedDay, to: Date()) ?? Date()
+    }
+
     var body: some View {
         Card {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Button { calendar.open(nil) } label: {
-                        Text(Date(), format: .dateTime.weekday(.wide).day().month(.wide))
+                        Text(shownDate, format: .dateTime.weekday(.wide).day().month(.wide))
                             .font(.system(size: 13, weight: .bold))
                     }
                     .buttonStyle(PressableStyle())
                     .help("Open calendar")
                     Spacer()
-                    Text("Next 24 hours").font(.system(size: 11)).foregroundStyle(.secondary)
+                    Menu {
+                        Picker("Day", selection: Binding(get: { calendar.selectedDay },
+                                                          set: { calendar.selectedDay = $0; calendar.refresh() })) {
+                            ForEach(Array(Self.dayNames.enumerated()), id: \.offset) { day, name in
+                                Text(name).tag(day)
+                            }
+                        }
+                        .pickerStyle(.inline)
+                        .labelsHidden()
+                    } label: {
+                        Text(dayName).font(.system(size: 11))
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
                 }
                 switch calendar.access {
                 case .notDetermined:
@@ -191,13 +225,16 @@ struct CalendarPanel: View {
                     }
                 case .granted:
                     if calendar.upcoming.isEmpty {
-                        message("No events in the next 24 hours.") { EmptyView() }
+                        message(calendar.selectedDay == 0 ? "No more events today." : "No events \(dayName.lowercased()).") { EmptyView() }
                     } else {
-                        VStack(alignment: .leading, spacing: 6) {
-                            ForEach(Array(calendar.upcoming.enumerated()), id: \.offset) { _, event in
-                                Button { calendar.open(event) } label: { EventRow(event: event) }
-                                    .buttonStyle(PressableStyle())
+                        ScrollView(.vertical, showsIndicators: false) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                ForEach(Array(calendar.upcoming.enumerated()), id: \.offset) { _, event in
+                                    Button { calendar.open(event) } label: { EventRow(event: event) }
+                                        .buttonStyle(PressableStyle())
+                                }
                             }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
                 }
@@ -241,11 +278,64 @@ private struct EventRow: View {
 
 struct TimerPanel: View {
     @ObservedObject var center: ActivityCenter
-    private let presets: [Double] = [1, 3, 5, 10, 15, 25, 45, 60]
+    // Remembered between launches so a favorite duration is one click away.
+    @AppStorage("timerHours") private var hours = 0
+    @AppStorage("timerMinutes") private var minutes = 5
+    @AppStorage("timerSeconds") private var seconds = 0
+
+    private var totalSeconds: Int { hours * 3600 + minutes * 60 + seconds }
+    private let quickMinutes = [1, 5, 10, 15, 30, 60]
+
+    private enum Unit { case hours, minutes, seconds }
+    @State private var hoveredUnit: Unit?
+    @State private var scrollMonitor: Any?
+    @State private var scrollAccumulator: CGFloat = 0
+
+    private struct ScrollInput: Sendable {
+        var deltaY: CGFloat
+        var inverted: Bool
+        var precise: Bool
+        var isMomentum: Bool
+    }
+
+    /// Scrolling over a unit changes it: up increases, down decreases (clamped, no wrap-around). Returns true when consumed.
+    private func handleScroll(_ input: ScrollInput) -> Bool {
+        guard let unit = hoveredUnit, !center.timer.isActive else { return false }
+        guard !input.isMomentum else { return true }
+        let finger = input.inverted ? input.deltaY : -input.deltaY
+        var steps = 0
+        if input.precise {
+            scrollAccumulator += finger
+            steps = -Int(scrollAccumulator / 10)
+            scrollAccumulator -= CGFloat(-steps) * 10
+        } else if finger != 0 {
+            steps = finger < 0 ? 1 : -1
+        }
+        if steps != 0 { adjust(unit, by: steps) }
+        return true
+    }
+
+    private func adjust(_ unit: Unit, by steps: Int) {
+        switch unit {
+        case .hours: hours = min(max(hours + steps, 0), 24)
+        case .minutes: minutes = min(max(minutes + steps, 0), 59)
+        case .seconds: seconds = min(max(seconds + steps, 0), 59)
+        }
+        normalize()
+    }
+
+    /// Quick buttons start right away and also fill the picker, so the same duration is remembered.
+    private func startQuick(minutes quick: Int) {
+        hours = quick / 60
+        minutes = quick % 60
+        seconds = 0
+        center.startTimer(seconds: quick * 60)
+    }
 
     var body: some View {
         Card {
-            HStack(spacing: 18) {
+            GeometryReader { geo in
+            HStack(spacing: 0) {
                 ZStack {
                     Circle().stroke(Color.orange.opacity(0.18), lineWidth: 6)
                     // Removed when idle: a running linear animation already targets 0 and can't be "reset" to 0.
@@ -256,6 +346,8 @@ struct TimerPanel: View {
                     timeText
                 }
                 .frame(width: 118, height: 118)
+                // The ring takes 3 parts of the width and the controls 7.
+                .frame(width: geo.size.width * 0.3, height: geo.size.height)
 
                 VStack(alignment: .leading, spacing: 10) {
                     if center.timer.isActive {
@@ -269,13 +361,25 @@ struct TimerPanel: View {
                             pill("Cancel", symbol: "xmark", tint: .white.opacity(0.7)) { center.stopTimer() }
                         }
                     } else {
-                        Text("Start a timer").font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
-                            ForEach(presets, id: \.self) { minutes in
-                                Button { center.startTimer(minutes: minutes) } label: {
-                                    Text(minutes >= 60 ? "1h" : "\(Int(minutes))m")
-                                        .font(.system(size: 12, weight: .semibold))
-                                        .frame(maxWidth: .infinity).padding(.vertical, 7)
+                        Text("Set a timer").font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
+                        HStack(alignment: .top, spacing: 6) {
+                            unitPicker($hours, max: 24, label: "hr", unit: .hours)
+                            colon
+                            unitPicker($minutes, max: 59, label: "min", unit: .minutes)
+                            colon
+                            unitPicker($seconds, max: 59, label: "sec", unit: .seconds)
+                            Spacer(minLength: 8)
+                            pill("Start", symbol: "play.fill") { center.startTimer(seconds: totalSeconds) }
+                                .opacity(totalSeconds > 0 ? 1 : 0.4)
+                                .disabled(totalSeconds == 0)
+                                .padding(.top, 22)
+                        }
+                        HStack(spacing: 6) {
+                            ForEach(quickMinutes, id: \.self) { quick in
+                                Button { startQuick(minutes: quick) } label: {
+                                    Text(quick >= 60 ? "\(quick / 60)h" : "\(quick)m")
+                                        .font(.system(size: 11.5, weight: .semibold))
+                                        .frame(maxWidth: .infinity).padding(.vertical, 5)
                                         .background(Capsule().fill(Color.orange.opacity(0.18)))
                                         .foregroundStyle(.orange)
                                         .contentShape(Capsule())
@@ -285,12 +389,70 @@ struct TimerPanel: View {
                         }
                     }
                 }
-                // Fixed width so the ring doesn't jump sideways when switching between presets and controls.
-                .frame(width: 330, alignment: .leading)
+                // Fixed share of the width so the ring doesn't jump sideways when switching between setup and controls.
+                .padding(.leading, 28)
+                .padding(.trailing, 8)
+                .frame(width: geo.size.width * 0.7, height: geo.size.height, alignment: .leading)
                 .animation(.easeInOut(duration: 0.2), value: center.timer.isActive)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .onAppear {
+                scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
+                    let input = ScrollInput(deltaY: event.scrollingDeltaY, inverted: event.isDirectionInvertedFromDevice,
+                                            precise: event.hasPreciseScrollingDeltas, isMomentum: event.momentumPhase != [])
+                    let consumed = MainActor.assumeIsolated { handleScroll(input) }
+                    return consumed ? nil : event
+                }
+            }
+            .onDisappear {
+                if let scrollMonitor { NSEvent.removeMonitor(scrollMonitor) }
+                scrollMonitor = nil
+                hoveredUnit = nil
+            }
         }
+    }
+
+    private var colon: some View {
+        Text(":").font(.system(size: 22, weight: .semibold, design: .rounded)).foregroundStyle(.secondary).padding(.top, 22)
+    }
+
+    /// 24:00:00 is the longest timer, so at 24 hours the minutes and seconds are forced to zero.
+    private func normalize() {
+        if hours >= 24 { hours = 24; minutes = 0; seconds = 0 }
+    }
+
+    private func unitPicker(_ value: Binding<Int>, max limit: Int, label: String, unit: Unit) -> some View {
+        VStack(spacing: 2) {
+            stepButton("chevron.up") { value.wrappedValue = value.wrappedValue >= limit ? 0 : value.wrappedValue + 1; normalize() }
+            TextField("00", text: Binding(
+                get: { String(format: "%02d", value.wrappedValue) },
+                set: { text in
+                    let digits = text.filter(\.isNumber).suffix(2)
+                    value.wrappedValue = min(Int(digits) ?? 0, limit)
+                    normalize()
+                }))
+                .textFieldStyle(.plain)
+                .multilineTextAlignment(.center)
+                .font(.system(size: 24, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.orange)
+                .frame(width: 52)
+            stepButton("chevron.down") { value.wrappedValue = value.wrappedValue <= 0 ? limit : value.wrappedValue - 1; normalize() }
+            Text(label).font(.system(size: 10)).foregroundStyle(.secondary)
+        }
+        .onHover { inside in
+            if inside { hoveredUnit = unit } else if hoveredUnit == unit { hoveredUnit = nil }
+        }
+    }
+
+    private func stepButton(_ symbol: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol).font(.system(size: 10, weight: .bold))
+                .foregroundStyle(.orange)
+                .frame(width: 52, height: 16)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PressableStyle())
     }
 
     @ViewBuilder private var timeText: some View {
@@ -325,39 +487,102 @@ struct TimerPanel: View {
 
 struct BatteryPanel: View {
     @ObservedObject var battery: BatteryService
+    @State private var keyboardLevel = 0.0
+    @State private var keyboardAuto = false
+    private let keyboardAvailable = KeyboardBacklight.isAvailable
 
     var body: some View {
         Card {
-            HStack(spacing: 22) {
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.35), lineWidth: 2.5)
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(LinearGradient(colors: [fill.opacity(0.75), fill], startPoint: .leading, endPoint: .trailing))
-                        .frame(width: max(CGFloat(battery.level) / 100 * 128, 6))
-                        .padding(5)
-                    if battery.isPluggedIn {
-                        Image(systemName: "bolt.fill").font(.system(size: 26, weight: .bold))
-                            .frame(maxWidth: .infinity)
-                            .shadow(radius: 4)
-                    }
-                }
-                .frame(width: 138, height: 68)
-                .overlay(alignment: .trailing) {
-                    Capsule().fill(Color.white.opacity(0.35)).frame(width: 5, height: 22).offset(x: 7)
-                }
-                .animation(.spring(response: 0.5, dampingFraction: 0.8), value: battery.level)
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("\(battery.level)%").font(.system(size: 34, weight: .bold, design: .rounded)).monospacedDigit()
-                    Text(battery.statusText).font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
-                    if battery.isLowPowerMode {
-                        Label("Low Power Mode", systemImage: "leaf.fill")
-                            .font(.system(size: 11, weight: .semibold)).foregroundStyle(.yellow)
-                    }
-                }
+            HStack(spacing: 0) {
+                batteryInfo.frame(maxWidth: .infinity)
+                Rectangle().fill(Color.white.opacity(0.1)).frame(width: 1).padding(.vertical, 8)
+                keyboardControl.frame(maxWidth: .infinity)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .onAppear { battery.refresh() }
+            // The remaining-time estimate changes without a power-source event, so re-read it while the panel is open.
+            .onReceive(Timer.publish(every: 15, on: .main, in: .common).autoconnect()) { _ in battery.refresh() }
+        }
+    }
+
+    private var batteryInfo: some View {
+        HStack(spacing: 14) {
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.35), lineWidth: 2.5)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(LinearGradient(colors: [fill.opacity(0.75), fill], startPoint: .leading, endPoint: .trailing))
+                    .frame(width: max(CGFloat(battery.level) / 100 * 98, 6))
+                    .padding(5)
+                if battery.isPluggedIn {
+                    Image(systemName: "bolt.fill").font(.system(size: 24, weight: .bold))
+                        .frame(maxWidth: .infinity)
+                        .shadow(radius: 4)
+                }
+            }
+            .frame(width: 108, height: 62)
+            .overlay(alignment: .trailing) {
+                Capsule().fill(Color.white.opacity(0.35)).frame(width: 5, height: 20).offset(x: 7)
+            }
+            .padding(.trailing, 6)
+            .animation(.spring(response: 0.5, dampingFraction: 0.8), value: battery.level)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("\(battery.level)%").font(.system(size: 32, weight: .bold, design: .rounded)).monospacedDigit()
+                Text(battery.statusText).font(.system(size: 13, weight: .semibold))
+                if let remaining = battery.remainingText {
+                    Text(remaining).font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
+                }
+                if battery.isLowPowerMode {
+                    Label("Low Power Mode", systemImage: "leaf.fill")
+                        .font(.system(size: 11, weight: .semibold)).foregroundStyle(.yellow)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var keyboardControl: some View {
+        if keyboardAvailable {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Label("Keyboard backlight", systemImage: "keyboard")
+                        .font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
+                    Spacer(minLength: 0)
+                    Text("\(Int((keyboardLevel * 100).rounded()))%")
+                        .font(.system(size: 12, weight: .semibold)).monospacedDigit()
+                }
+                HStack(spacing: 8) {
+                    Image(systemName: "light.min").foregroundStyle(.secondary)
+                    LevelSlider(value: $keyboardLevel, tint: .white) { level in
+                        // With auto brightness on, the light sensor would undo a manual level.
+                        if keyboardAuto { KeyboardBacklight.setAuto(false); keyboardAuto = false }
+                        KeyboardBacklight.set(Float(level))
+                    }
+                    Image(systemName: "light.max").foregroundStyle(.secondary)
+                }
+                .font(.system(size: 12))
+                Button {
+                    keyboardAuto.toggle()
+                    KeyboardBacklight.setAuto(keyboardAuto)
+                    keyboardLevel = Double(KeyboardBacklight.level ?? 0)
+                } label: {
+                    Label(keyboardAuto ? "Auto brightness on" : "Auto brightness off", systemImage: "sun.max")
+                        .font(.system(size: 11, weight: .medium))
+                        .padding(.horizontal, 9).padding(.vertical, 4)
+                        .background(Capsule().fill(Color.white.opacity(keyboardAuto ? 0.18 : 0.08)))
+                        .foregroundStyle(keyboardAuto ? .white : .secondary)
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(PressableStyle())
+            }
+            .padding(.leading, 22)
+            .onAppear {
+                keyboardLevel = Double(KeyboardBacklight.level ?? 0)
+                keyboardAuto = KeyboardBacklight.isAutoEnabled
+            }
+        } else {
+            Label("No keyboard backlight", systemImage: "keyboard")
+                .font(.system(size: 12)).foregroundStyle(.secondary)
         }
     }
 
@@ -365,6 +590,37 @@ struct BatteryPanel: View {
         if battery.isPluggedIn { return .green }
         if battery.isLowPowerMode { return .yellow }
         return battery.level <= 20 ? .red : .white
+    }
+}
+
+/// Draggable level bar that matches the island's look; the whole track is the hit area.
+private struct LevelSlider: View {
+    @Binding var value: Double
+    let tint: Color
+    /// Called only for changes made by the user, not when the value is set from outside.
+    var onUserChange: (Double) -> Void = { _ in }
+    private let knob: CGFloat = 16
+
+    var body: some View {
+        GeometryReader { geo in
+            let travel = max(geo.size.width - knob, 1)
+            let x = travel * value
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.white.opacity(0.18)).frame(height: 8)
+                Capsule().fill(tint).frame(width: x + knob / 2, height: 8)
+                Circle().fill(tint)
+                    .frame(width: knob, height: knob)
+                    .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
+                    .offset(x: x)
+            }
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0).onChanged { drag in
+                value = min(max((drag.location.x - knob / 2) / travel, 0), 1)
+                onUserChange(value)
+            })
+        }
+        .frame(height: knob)
     }
 }
 

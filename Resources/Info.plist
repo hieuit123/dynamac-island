@@ -5,6 +5,7 @@
 	<key>CFBundleName</key><string>Dynamac Island</string>
 	<key>CFBundleDisplayName</key><string>Dynamac Island</string>
 	<key>CFBundleIdentifier</key><string>com.dynamac.island</string>
+	<key>CFBundleIconFile</key><string>AppIcon</string>
 	<key>CFBundleExecutable</key><string>DynamacIsland</string>
 	<key>CFBundlePackageType</key><string>APPL</string>
 	<key>CFBundleShortVersionString</key><string>1.0.0</string>

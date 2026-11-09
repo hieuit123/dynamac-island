@@ -21,7 +21,7 @@ enum TransientActivity: Equatable {
     /// Whether the right side needs extra room (longer labels).
     var isWide: Bool {
         switch self {
-        case .bluetooth, .focus, .eventSoon, .lowPowerMode, .linkCopied: return true
+        case .bluetooth, .focus, .eventSoon, .lowPowerMode, .linkCopied, .timerDone: return true
         default: return false
         }
     }
@@ -37,10 +37,14 @@ final class ActivityCenter: ObservableObject {
     @Published private(set) var transient: TransientActivity?
     @Published private(set) var timer = CountdownTimer()
     @Published private(set) var isSuspended = false
-    /// Next calendar event shown as a live activity shortly before it starts.
-    @Published var upcomingEvent: CalendarService.EventInfo?
+    /// Calendar events inside their live-activity window (soon to start, or just started), earliest first.
+    @Published private(set) var upcomingEvents: [CalendarService.EventInfo] = []
+    /// Events the user closed; forgotten once they leave the window.
+    @Published private(set) var dismissedEventIDs = Set<String>()
     /// Identifier of a live activity the user swiped away; it stays hidden until the activity changes.
     @Published var dismissedActivityID: String?
+
+    var visibleEvents: [CalendarService.EventInfo] { upcomingEvents.filter { !dismissedEventIDs.contains($0.id) } }
 
     var onSuspendChange: (Bool) -> Void = { _ in }
 
@@ -84,10 +88,26 @@ final class ActivityCenter: ObservableObject {
         transient = nil
     }
 
+    func setUpcomingEvents(_ events: [CalendarService.EventInfo]) {
+        if events != upcomingEvents { upcomingEvents = events }
+        let ids = Set(events.map(\.id))
+        if !dismissedEventIDs.isSubset(of: ids) { dismissedEventIDs.formIntersection(ids) }
+    }
+
+    func dismissEvent(_ id: String) {
+        dismissedEventIDs.insert(id)
+    }
+
+    func dismissAllEvents() {
+        dismissedEventIDs.formUnion(upcomingEvents.map(\.id))
+    }
+
     // MARK: Timer (a single one-shot Timer at the end date; no per-second ticking)
 
-    func startTimer(minutes: Double) {
-        timer.start(duration: minutes * 60)
+    static let maxTimerSeconds = 24 * 3600
+
+    func startTimer(seconds: Int) {
+        timer.start(duration: TimeInterval(min(seconds, Self.maxTimerSeconds)))
         scheduleTimerFire()
     }
 

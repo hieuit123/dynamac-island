@@ -17,6 +17,18 @@ cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp -R build/MediaRemoteAdapter.framework "$APP/Contents/Frameworks/"
 cp Vendor/mediaremote-adapter/bin/mediaremote-adapter.pl "$APP/Contents/Resources/"
 cp Vendor/mediaremote-adapter/LICENSE "$APP/Contents/Resources/ThirdParty/mediaremote-adapter-LICENSE.txt"
+# Build AppIcon.icns from Resources/AppIcon.png (square PNG, ideally 1024x1024).
+if [ -f Resources/AppIcon.png ]; then
+  ICONSET="build/AppIcon.iconset"
+  rm -rf "$ICONSET" && mkdir -p "$ICONSET"
+  for size in 16 32 128 256 512; do
+    sips -z $size $size Resources/AppIcon.png --out "$ICONSET/icon_${size}x${size}.png" >/dev/null
+    sips -z $((size * 2)) $((size * 2)) Resources/AppIcon.png --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null
+  done
+  iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
+  rm -rf "$ICONSET"
+fi
+
 codesign --force --deep --sign - "$APP"
 
 echo "Built $APP"

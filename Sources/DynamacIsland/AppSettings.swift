@@ -54,6 +54,7 @@ final class AppSettings: ObservableObject {
     @Published var showTimer: Bool { didSet { defaults.set(showTimer, forKey: "showTimer") } }
     @Published var showPet: Bool { didSet { defaults.set(showPet, forKey: "showPet") } }
     @Published var showBattery: Bool { didSet { defaults.set(showBattery, forKey: "showBattery") } }
+    @Published var defaultTab: ExpandedTab { didSet { defaults.set(defaultTab.rawValue, forKey: "defaultTab") } }
     @Published var animatedWaveform: Bool { didSet { defaults.set(animatedWaveform, forKey: "animatedWaveform") } }
     @Published var albumTintedEffects: Bool { didSet { defaults.set(albumTintedEffects, forKey: "albumTintedEffects") } }
     @Published var gradientProgress: Bool { didSet { defaults.set(gradientProgress, forKey: "gradientProgress") } }
@@ -107,7 +108,7 @@ final class AppSettings: ObservableObject {
     }
 
     private init() {
-        defaults.register(defaults: ["hudEnabled": true, "expandOnHover": false, "hapticsEnabled": true, "showMusic": true, "showCalendar": true, "showTimer": true, "showPet": true, "showBattery": true, "animatedWaveform": true, "albumTintedEffects": true, "gradientProgress": true, "swipeToSkip": true, "hideInFullscreen": true, "hideWhileGaming": true, "hideInMissionControl": false, "hideFromCapture": false, "hudShowPercentage": false, "hudOvershoot": true, "hudGlow": true, "chargingSound": true, "lowBatteryAlerts": true, "lowBatterySound": true, "lowPowerModeAlert": true, "calendarLiveActivity": true, "timeToLeaveAlert": true, "showDeclinedEvents": false, "excludeSubscribedCalendars": true, "verticalSwipeGestures": true, "middleClickCycle": true, "marqueeTitles": true, "showMusicWhenPaused": false, "showAudioBadges": true, "useMediaRemote": true, "bluetoothActivity": true, "focusActivity": true, "simulatedNotch": true, "showOnAllDisplays": false, "onboardingDone": false, "hoverDelay": 0.0, "notchWidthOffset": 0.0, "notchHeightOffset": 0.0, "calendarLeadMinutes": 10, "displayID": 0])
+        defaults.register(defaults: ["hudEnabled": true, "expandOnHover": false, "hapticsEnabled": true, "showMusic": true, "showCalendar": true, "showTimer": true, "showPet": true, "showBattery": true, "defaultTab": "home", "animatedWaveform": true, "albumTintedEffects": true, "gradientProgress": true, "swipeToSkip": true, "hideInFullscreen": true, "hideWhileGaming": true, "hideInMissionControl": false, "hideFromCapture": false, "hudShowPercentage": false, "hudOvershoot": true, "hudGlow": true, "chargingSound": true, "lowBatteryAlerts": true, "lowBatterySound": true, "lowPowerModeAlert": true, "calendarLiveActivity": true, "timeToLeaveAlert": true, "showDeclinedEvents": false, "excludeSubscribedCalendars": true, "verticalSwipeGestures": true, "middleClickCycle": true, "marqueeTitles": true, "showMusicWhenPaused": false, "showAudioBadges": true, "useMediaRemote": true, "bluetoothActivity": true, "focusActivity": true, "simulatedNotch": true, "showOnAllDisplays": false, "onboardingDone": false, "hoverDelay": 0.0, "notchWidthOffset": -20.0, "notchHeightOffset": 0.0, "calendarLeadMinutes": 10, "displayID": 0])
         hudEnabled = defaults.bool(forKey: "hudEnabled")
         expandOnHover = defaults.bool(forKey: "expandOnHover")
         hapticsEnabled = defaults.bool(forKey: "hapticsEnabled")
@@ -116,6 +117,7 @@ final class AppSettings: ObservableObject {
         showTimer = defaults.bool(forKey: "showTimer")
         showPet = defaults.bool(forKey: "showPet")
         showBattery = defaults.bool(forKey: "showBattery")
+        defaultTab = ExpandedTab(rawValue: defaults.string(forKey: "defaultTab") ?? "") ?? .home
         animatedWaveform = defaults.bool(forKey: "animatedWaveform")
         albumTintedEffects = defaults.bool(forKey: "albumTintedEffects")
         gradientProgress = defaults.bool(forKey: "gradientProgress")
@@ -157,5 +159,34 @@ final class AppSettings: ObservableObject {
         calendarApp = CalendarApp(rawValue: defaults.string(forKey: "calendarApp") ?? "") ?? .calendar
         displayID = UInt32(defaults.integer(forKey: "displayID"))
         launchAtLogin = SMAppService.mainApp.status == .enabled
+    }
+
+    /// Exhaustive on purpose: a new `ExpandedTab` will not compile until it is listed here, so it always appears in Settings.
+    func isEnabled(_ tab: ExpandedTab) -> Bool {
+        switch tab {
+        case .home: return showMusic
+        case .shelf: return true
+        case .calendar: return showCalendar
+        case .timer: return showTimer
+        case .pet: return showPet
+        case .battery: return showBattery
+        }
+    }
+
+    func setEnabled(_ tab: ExpandedTab, _ enabled: Bool) {
+        switch tab {
+        case .home: showMusic = enabled
+        case .shelf: break
+        case .calendar: showCalendar = enabled
+        case .timer: showTimer = enabled
+        case .pet: showPet = enabled
+        case .battery: showBattery = enabled
+        }
+        if !enabled, tab == defaultTab, tab != .home { defaultTab = .home }
+    }
+
+    func makeDefault(_ tab: ExpandedTab) {
+        if !isEnabled(tab) { setEnabled(tab, true) }
+        defaultTab = tab
     }
 }

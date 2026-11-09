@@ -55,6 +55,8 @@ final class IslandGestureMonitor {
             return handleHorizontal(vm, finger: fingerX, isEnd: isEnd)
         }
         guard settings.verticalSwipeGestures else { return false }
+        // The calendar list and the timer fields scroll vertically, so they keep those events instead of treating them as swipes.
+        if vm.state == .expanded, vm.tab == .calendar || vm.tab == .timer { return false }
         if !fired, abs(fingerY) > 40 {
             fired = true
             fingerY > 0 ? swipeDown(vm) : swipeUp(vm)
@@ -91,8 +93,8 @@ final class IslandGestureMonitor {
         // Dismiss whichever live activity is showing until it changes.
         if center.transient != nil {
             center.dismissTransient()
-        } else if let event = center.upcomingEvent {
-            center.dismissedActivityID = "event:" + event.id
+        } else if !center.visibleEvents.isEmpty {
+            center.dismissAllEvents()
         } else if let track = nowPlaying.track {
             center.dismissedActivityID = "music:" + track.title
         }

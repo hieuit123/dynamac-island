@@ -18,7 +18,10 @@ final class CalendarService: ObservableObject {
 
     @Published private(set) var access: Access
     @Published private(set) var upcoming: [EventInfo] = []
-    var nextEvent: EventInfo? { upcoming.first }
+    /// Day shown in the panel: 0 = today, 1 = tomorrow, 2 = the day after. The live activity and the badge always use today.
+    @Published var selectedDay = 0
+    /// Next event today; drives the dot on the Calendar icon.
+    @Published private(set) var nextEvent: EventInfo?
 
     private let store = EKEventStore()
     private let settings: AppSettings
@@ -144,16 +147,36 @@ final class CalendarService: ObservableObject {
         timers.removeAll()
         guard settings.showCalendar, access == .granted else {
             upcoming = []
-            center.upcomingEvent = nil
+            nextEvent = nil
+            center.setUpcomingEvents([])
             return
         }
         let now = Date()
-        let predicate = store.predicateForEvents(withStart: now, end: now.addingTimeInterval(24 * 3600), calendars: nil)
-        let events = store.events(matching: predicate)
-            .filter { $0.endDate > now && include($0) }
+        let today = events(from: now, to: Self.startOfTomorrow(after: now), now: now)
+        nextEvent = today.first.map(Self.info)
+        if selectedDay == 0 {
+            upcoming = today.map(Self.info)
+        } else {
+            let calendar = Calendar.current
+            let start = calendar.date(byAdding: .day, value: selectedDay, to: calendar.startOfDay(for: now)) ?? now
+            let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start.addingTimeInterval(24 * 3600)
+            upcoming = events(from: start, to: end, now: nil).map(Self.info)
+        }
+        // Events past their window are dropped here, so every refresh time computed below lies in the future.
+        let pending = today.filter { !$0.isAllDay && $0.startDate.addingTimeInterval(Self.nowWindow) > now }
+        scheduleLiveActivities(pending.map(Self.info), now: now)
+    }
+
+    /// Events in the range, all-day ones last. With `now` set, events that already ended are dropped.
+    private func events(from start: Date, to end: Date, now: Date?) -> [EKEvent] {
+        store.events(matching: store.predicateForEvents(withStart: start, end: end, calendars: nil))
+            .filter { event in (now.map { $0 < event.endDate } ?? true) && include(event) }
             .sorted { ($0.isAllDay ? 1 : 0, $0.startDate) < ($1.isAllDay ? 1 : 0, $1.startDate) }
-        upcoming = events.prefix(3).map(Self.info)
-        scheduleLiveActivity(events.first { !$0.isAllDay }.map(Self.info), now: now)
+    }
+
+    private static func startOfTomorrow(after date: Date) -> Date {
+        let calendar = Calendar.current
+        return calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: date)) ?? date.addingTimeInterval(24 * 3600)
     }
 
     private func include(_ event: EKEvent) -> Bool {
@@ -174,30 +197,38 @@ final class CalendarService: ObservableObject {
                   location: event.location)
     }
 
-    private func scheduleLiveActivity(_ event: EventInfo?, now: Date) {
-        var nextRefresh = now.addingTimeInterval(3 * 3600)
+    /// How long an event stays on the island after it starts.
+    private static let nowWindow: TimeInterval = 5 * 60
+
+    /// An event is shown from `lead` before its start until `nowWindow` after it; `events` are sorted by start.
+    private func scheduleLiveActivities(_ events: [EventInfo], now: Date) {
+        // Refresh at midnight too, so the list switches to the new day.
+        var nextRefresh = min(now.addingTimeInterval(3 * 3600), Self.startOfTomorrow(after: now))
         defer { schedule(at: nextRefresh) { [weak self] in self?.refresh() } }
 
-        guard let event, settings.calendarLiveActivity else {
-            center.upcomingEvent = nil
+        guard settings.calendarLiveActivity else {
+            center.setUpcomingEvents([])
             return
         }
         let lead = TimeInterval(settings.calendarLeadMinutes * 60)
-        let showFrom = event.start.addingTimeInterval(-lead)
-        let showUntil = event.start.addingTimeInterval(5 * 60)
-        if now >= showFrom && now < showUntil {
-            activate(event)
-            nextRefresh = min(nextRefresh, showUntil)
-        } else {
-            center.upcomingEvent = nil
-            nextRefresh = min(nextRefresh, showFrom)
+        var active: [EventInfo] = []
+        for event in events {
+            let showFrom = event.start.addingTimeInterval(-lead)
+            if now >= showFrom {
+                active.append(event)
+                nextRefresh = min(nextRefresh, event.start.addingTimeInterval(Self.nowWindow))
+            } else {
+                nextRefresh = min(nextRefresh, showFrom)
+            }
         }
+        center.setUpcomingEvents(active)
+        alert(active.filter { !alertedEventIDs.contains($0.id) })
     }
 
-    private func activate(_ event: EventInfo) {
-        center.upcomingEvent = event
-        guard settings.timeToLeaveAlert, !alertedEventIDs.contains(event.id) else { return }
-        alertedEventIDs.insert(event.id)
+    /// One alert for the earliest of the events that just appeared.
+    private func alert(_ events: [EventInfo]) {
+        guard settings.timeToLeaveAlert, let event = events.first else { return }
+        alertedEventIDs.formUnion(events.map(\.id))
         let minutes = max(Int(event.start.timeIntervalSinceNow / 60), 0)
         center.showTransient(.eventSoon(title: event.title, minutes: minutes, color: event.color), duration: 5, sound: "Ping")
     }
