@@ -6,6 +6,8 @@ import SwiftUI
 /// Plays a sound bundled in the app's Resources (for example the alarm), or a system sound by name.
 enum AlertSound {
     static let alarm = "alarm-clock-ringing"
+    /// Length of the bundled alarm in seconds, used to space several alarms.
+    static let alarmDuration = 3.4
     /// Keeps the sound alive while it plays.
     private static var playing: NSSound?
 

@@ -30,7 +30,9 @@ final class CalendarService: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     /// One-shot timers only (lead time, event start, next refresh) – nothing ticks in between.
     private var timers: [Timer] = []
-    private var alertedEventIDs = Set<String>()
+    /// Keys (event id plus start, so each occurrence of a recurring event counts) already alerted when they appeared, and at their start.
+    private var leadAlerted = Set<String>()
+    private var startAlerted = Set<String>()
     private var syncTimer: Timer?
 
     init(settings: AppSettings, center: ActivityCenter) {
@@ -216,21 +218,41 @@ final class CalendarService: ObservableObject {
             let showFrom = event.start.addingTimeInterval(-lead)
             if now >= showFrom {
                 active.append(event)
-                nextRefresh = min(nextRefresh, event.start.addingTimeInterval(Self.nowWindow))
+                // Wake up at the start (for the second alert), then when the event leaves the island.
+                nextRefresh = min(nextRefresh, event.start > now ? event.start : event.start.addingTimeInterval(Self.nowWindow))
             } else {
                 nextRefresh = min(nextRefresh, showFrom)
             }
         }
         center.setUpcomingEvents(active)
-        alert(active.filter { !alertedEventIDs.contains($0.id) })
+        alert(for: active, now: now)
     }
 
-    /// One alert for the earliest of the events that just appeared.
-    private func alert(_ events: [EventInfo]) {
-        guard settings.timeToLeaveAlert, let event = events.first else { return }
-        alertedEventIDs.formUnion(events.map(\.id))
-        let minutes = max(Int(event.start.timeIntervalSinceNow / 60), 0)
-        center.showTransient(.eventSoon(title: event.title, minutes: minutes, color: event.color), duration: 5, sound: AlertSound.alarm)
+    private func key(_ event: EventInfo) -> String { "\(event.id)|\(event.start.timeIntervalSince1970)" }
+
+    /// One alarm per meeting when it shows up on the island, and another at its start unless it was dismissed.
+    private func alert(for active: [EventInfo], now: Date) {
+        guard settings.timeToLeaveAlert else { return }
+        var toAlert: [EventInfo] = []
+        for event in active {
+            let k = key(event)
+            if now < event.start {
+                if leadAlerted.insert(k).inserted { toAlert.append(event) }
+            } else if startAlerted.insert(k).inserted {
+                leadAlerted.insert(k)
+                // A late refresh (a minute or more after the start) must not ring.
+                if now.timeIntervalSince(event.start) < 60, !center.dismissedEventIDs.contains(event.id) { toAlert.append(event) }
+            }
+        }
+        guard let first = toAlert.first else { return }
+        let minutes = max(Int(ceil(first.start.timeIntervalSince(now) / 60)), 0)
+        center.showTransient(.eventSoon(title: first.title, minutes: minutes, color: first.color), duration: 5, sound: nil)
+        // Each meeting rings once; several at the same moment ring one after the other.
+        for index in toAlert.indices {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * (AlertSound.alarmDuration + 0.3)) {
+                AlertSound.play(AlertSound.alarm)
+            }
+        }
     }
 
     private func schedule(at date: Date, _ action: @escaping @MainActor () -> Void) {
