@@ -230,7 +230,7 @@ final class CalendarService: ObservableObject {
         guard settings.timeToLeaveAlert, let event = events.first else { return }
         alertedEventIDs.formUnion(events.map(\.id))
         let minutes = max(Int(event.start.timeIntervalSinceNow / 60), 0)
-        center.showTransient(.eventSoon(title: event.title, minutes: minutes, color: event.color), duration: 5, sound: "Ping")
+        center.showTransient(.eventSoon(title: event.title, minutes: minutes, color: event.color), duration: 5, sound: AlertSound.alarm)
     }
 
     private func schedule(at date: Date, _ action: @escaping @MainActor () -> Void) {

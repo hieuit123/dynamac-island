@@ -57,7 +57,10 @@ Delta on top of [2026-11-07-dynamac-island-pet-styles-calendar.md](2026-11-07-dy
 - **Quick buttons**: 1m, 5m, 10m, 15m, 30m, 1h under the picker. They start the timer immediately and also fill the picker.
 - **Persistence**: `@AppStorage` keys `timerHours`, `timerMinutes`, `timerSeconds` (default 0 / 5 / 0).
 - **Layout**: a `GeometryReader` gives the ring 30% of the width and the controls 70%, with 28 pt of leading padding on the controls. The proportions are fixed, so the ring does not move when switching between setup and running.
-- **Sound**: unchanged. `ActivityCenter.timerFinished()` shows "Done" for 5 s and plays the system sound Glass once. A sound and repeat picker was built and then removed on request.
+- **Sound**: `ActivityCenter.timerFinished()` shows "Done" for 5 s and plays the bundled alarm (`AlertSound.alarm`) once. The same alarm replaced the Ping sound of the upcoming-event (time-to-leave) alert in `CalendarService`. A sound and repeat picker was built earlier and removed on request; the sound is fixed, not a setting.
+  - `Resources/Sounds/alarm-clock-ringing.aiff` (AIFC, 48 kHz stereo, 3.4 s, about 640 KB) was supplied by the owner from `~/Downloads`. `scripts/bundle.sh` copies `Resources/Sounds/*.aiff` into the app's Resources.
+  - `AlertSound.play(_:)` looks for `<name>.aiff` in `Bundle.main` and plays it through `NSSound(contentsOf:)`, keeping a reference while it plays. If the file is missing (for example when running outside the app bundle) it falls back to a system sound of that name, then to Glass. Other alerts (charging, low battery) still use system sounds.
+  - The source is a sound library ("universfield" in the file name); its license was not checked, so check it before publishing.
 
 ## Calendar
 

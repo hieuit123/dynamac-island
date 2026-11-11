@@ -3,6 +3,24 @@ import Combine
 import IslandCore
 import SwiftUI
 
+/// Plays a sound bundled in the app's Resources (for example the alarm), or a system sound by name.
+enum AlertSound {
+    static let alarm = "alarm-clock-ringing"
+    /// Keeps the sound alive while it plays.
+    private static var playing: NSSound?
+
+    static func play(_ name: String) {
+        if let url = Bundle.main.url(forResource: name, withExtension: "aiff"),
+           let sound = NSSound(contentsOf: url, byReference: true) {
+            playing = sound
+            sound.play()
+        } else {
+            // Not running from the app bundle (for example `swift run`): fall back to a system sound.
+            (NSSound(named: name) ?? NSSound(named: "Glass"))?.play()
+        }
+    }
+}
+
 enum HUDKind: Equatable {
     case volume(level: Float, muted: Bool)
     case brightness(level: Float)
@@ -76,7 +94,7 @@ final class ActivityCenter: ObservableObject {
 
     func showTransient(_ activity: TransientActivity, duration: TimeInterval = 3, sound: String? = nil) {
         transient = activity
-        if let sound { NSSound(named: sound)?.play() }
+        if let sound { AlertSound.play(sound) }
         transientWork?.cancel()
         let work = DispatchWorkItem { [weak self] in self?.transient = nil }
         transientWork = work
@@ -139,7 +157,7 @@ final class ActivityCenter: ObservableObject {
 
     private func timerFinished() {
         timer.stop()
-        showTransient(.timerDone, duration: 5, sound: "Glass")
+        showTransient(.timerDone, duration: 5, sound: AlertSound.alarm)
     }
 }
 
