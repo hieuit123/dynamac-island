@@ -17,6 +17,9 @@ cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp -R build/MediaRemoteAdapter.framework "$APP/Contents/Frameworks/"
 cp Vendor/mediaremote-adapter/bin/mediaremote-adapter.pl "$APP/Contents/Resources/"
 cp Vendor/mediaremote-adapter/LICENSE "$APP/Contents/Resources/ThirdParty/mediaremote-adapter-LICENSE.txt"
+# Bundled alert sounds (the timer and calendar alarm).
+cp Resources/Sounds/*.aiff "$APP/Contents/Resources/" 2>/dev/null || true
+
 # Build AppIcon.icns from Resources/AppIcon.png (square PNG, ideally 1024x1024).
 if [ -f Resources/AppIcon.png ]; then
   ICONSET="build/AppIcon.iconset"

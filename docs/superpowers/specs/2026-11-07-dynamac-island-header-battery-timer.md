@@ -57,7 +57,10 @@ Delta on top of [2026-11-07-dynamac-island-pet-styles-calendar.md](2026-11-07-dy
 - **Quick buttons**: 1m, 5m, 10m, 15m, 30m, 1h under the picker. They start the timer immediately and also fill the picker.
 - **Persistence**: `@AppStorage` keys `timerHours`, `timerMinutes`, `timerSeconds` (default 0 / 5 / 0).
 - **Layout**: a `GeometryReader` gives the ring 30% of the width and the controls 70%, with 28 pt of leading padding on the controls. The proportions are fixed, so the ring does not move when switching between setup and running.
-- **Sound**: unchanged. `ActivityCenter.timerFinished()` shows "Done" for 5 s and plays the system sound Glass once. A sound and repeat picker was built and then removed on request.
+- **Sound**: `ActivityCenter.timerFinished()` shows "Done" for 5 s and plays the bundled alarm (`AlertSound.alarm`) once. The same alarm replaced the Ping sound of the upcoming-event (time-to-leave) alert in `CalendarService`; see "Meeting alarms" below. A sound and repeat picker was built earlier and removed on request; the sound is fixed, not a setting.
+  - `Resources/Sounds/alarm-clock-ringing.aiff` (AIFC, 48 kHz stereo, 3.4 s, about 640 KB) was supplied by the owner from `~/Downloads`. `scripts/bundle.sh` copies `Resources/Sounds/*.aiff` into the app's Resources.
+  - `AlertSound.play(_:)` looks for `<name>.aiff` in `Bundle.main` and plays it through `NSSound(contentsOf:)`, keeping a reference while it plays. If the file is missing (for example when running outside the app bundle) it falls back to a system sound of that name, then to Glass. Other alerts (charging, low battery) still use system sounds.
+  - The source is a sound library ("universfield" in the file name); its license was not checked, so check it before publishing.
 
 ## Calendar
 
@@ -65,6 +68,18 @@ Delta on top of [2026-11-07-dynamac-island-pet-styles-calendar.md](2026-11-07-dy
 - **Day dropdown**: a `Menu` next to the date offers Today, Tomorrow and Day after tomorrow, stored in `CalendarService.selectedDay` (0, 1 or 2). The options are an inline `Picker`, so the selected day shows a checkmark (they were plain buttons at first, which gave no sign of the current choice). Today shows events that have not ended; tomorrow and the day after show every event of that calendar day (from its 00:00 to the next 00:00, all-day ones last), with the same filters (declined, subscribed). The shown date, the header label and the empty state ("No events tomorrow.") follow the selection. `refresh()` computes today's list every time (for the live activity and `nextEvent`, which is now a stored property that drives the icon's dot) and the selected day's list for display. Opening the Calendar panel resets the selection to Today. Not verified: the menu on this non-activating panel.
 - `CalendarPanel` puts the list in a vertical `ScrollView` (no indicator) inside the card.
 - **Gestures**: vertical scroll events were consumed as swipe-down (cycle tab) and swipe-up (collapse), which would have closed the island while scrolling. In `IslandGestureMonitor.handleScroll`, the vertical branch now returns `false` when the island is expanded on the Calendar or Timer tab, so scrolling reaches the event list or the timer fields. On those tabs swipe-up no longer collapses and swipe-down no longer cycles tabs; middle-click, the icons and moving the pointer away still work.
+
+## Meeting alarms
+
+- Behavior asked for: every meeting rings the alarm once when it appears on the island (at the "Show before start" lead time, 10 minutes by default), and rings again when it starts, but only if it was not dismissed. Nothing rings at the minute marks in between.
+- `CalendarService.alert(for:now:)` runs on every refresh and keeps two sets of keys, `leadAlerted` and `startAlerted`. A key is the event id plus its start time, so each occurrence of a recurring event is treated separately (the id alone is shared by all occurrences, which would have silenced a daily meeting after its first ring).
+  - Before the start: a meeting not yet in `leadAlerted` rings.
+  - At or after the start: a meeting not yet in `startAlerted` is marked, and rings only if the refresh happens less than 60 s after the start and the event id is not in `ActivityCenter.dismissedEventIDs`. A late refresh (for example the app starting minutes after the meeting began) stays silent.
+- The refresh timer now also fires at each active event's start (it used to wake at the lead time and at start + 5 minutes only), so the second alarm is on time, within the timer's 5 s tolerance.
+- Several meetings that appear together ring one after the other, spaced by the alarm length (`AlertSound.alarmDuration`, 3.4 s) plus 0.3 s; the "In N m" banner shows the earliest of them. The banner shows "Starting" at the start alert, and the minutes are now rounded up, so 10 minutes before reads "In 10m" instead of "In 9m".
+- Dismissing a meeting only hides it and cancels its start alarm; it does not stop an alarm that is already playing.
+- Needs both "Upcoming event live activity" and "Time-to-leave alert" to be on.
+- Not verified on a running app: the timing of the start alarm, and the alarms of several simultaneous meetings.
 
 ## Build and icon
 
